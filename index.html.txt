@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Barnstormer – Rings + Horses (dust) + Radio Towers + Dynamic Lighting + Lanes + Audio</title>
+  <style>
+    html,body{height:100%;margin:0;background:#87CEEB;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    canvas{display:block;margin:0 auto;image-rendering:crisp-edges;image-rendering:-webkit-optimize-contrast;}
+    #hud{position:fixed;left:10px;top:10px;color:#111;background:rgba(255,255,255,.6);padding:6px 10px;border-radius:8px;font-weight:600}
+  </style>
+</head>
+<body>
+  <div id="hud">W/S: up/down • Shift: speed boost • Space: fire
+    <button id="mute" style="margin-left:8px;border:0;background:#fff;border-radius:6px;padding:4px 8px;cursor:pointer">🔊</button>
+  </div>
+  <canvas id="game"></canvas>
+  <script>
+    const canvas=document.getElementById('game');
+    const ctx=canvas.getContext('2d');
+    function resize(){
+      const dpr=Math.max(2,window.devicePixelRatio||1);
+      canvas.width=innerWidth*dpr;
+      canvas.height=innerHeight*dpr;
+      canvas.style.width=innerWidth+'px';
+      canvas.style.height=innerHeight+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    resize();
+    addEventListener('resize',resize);
+
+    // === State ===
+    const w=()=>canvas.clientWidth, h=()=>canvas.clientHeight;
+    const plane={x:150,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0};
+    let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
+    const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
+    let distRing=0,distGround=0,distCloud=0;
+    let frameCount=0;
+
+    const keys={};
+    addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true; if(!audioInited) initAudio(); if(k===' '||k==='space'){ fireBullet(); e.preventDefault(); }});
+    addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+
+    function currentScrollSpeed(){return keys['shift']?plane.boostSpeed:plane.baseSpeed;}
+
+    // === Lighting helpers (dynamic sky & ground) ===
+    let sunlightAngle=0; // drives time-of-day and shadow direction
+    const clamp01=x=>Math.max(0,Math.min(1,x));
+    const lerp=(a,b,t)=>a+(b-a)*t;
+    const lerpColor=(c1,c2,t)=>{
+      t=clamp01(t);
+      const r=Math.round(lerp(c1[0],c2[0],t));
+      const g=Math.round(lerp(c1[1],c2[1],t));
+      const b=Math.round(lerp(c1[2],c2[2],t));
+      return `rgb(${r},${g},${b})`;
+    };
+    const dayToDuskT=()=>clamp01((Math.sin(sunlightAngle- Math.PI/2)+1)/2); // 0 midday -> 1 dusk
+
+    function drawSky(){
+      const t=dayToDuskT();
+      const top = lerpColor([135,206,235],[255,178,122],t);
+      const bot = lerpColor([176,224,255],[240,108,59],t);
+      const g=ctx.createLinearGradient(0,0,0,h());
+      g.addColorStop(0,top); g.addColorStop(1,bot);
+      ctx.fillStyle=g; ctx.fillRect(0,0,w(),h());
+      const groundColor=lerpColor([34,139,34],[25,90,25],t);
+      ctx.fillStyle=groundColor; ctx.fillRect(0,h()-60,w(),60);
+    }
+
+    // === Spawners ===
+    function spawnClouds(){
+      const num=Math.floor(Math.random()*3)+1;
+      for(let i=0;i<num;i++){
+        const size=24+Math.random()*56;
+        clouds.push({x:w()+80+Math.random()*160,y:20+Math.random()*(h()*0.5-40),size});
+      }
+    }
+
+    function spawnGroundElements(){
+      // choose 1-3 elements, non-overlapping, extra spacing rules (barn-tree, horses)
+      const count=Math.floor(Math.random()*3)+1;
+      for(let i=0;i<count;i++){
+        // type distribution incl. radio and horse
+        const r=Math.random();
+        let type=(r<0.18)?'farmhouse':(r<0.36)?'office':(r<0.54)?'barn':(r<0.72)?'tree':(r<0.9)?'radio':'horse';
+        // sizes
+        let baseW,baseH; 
+        if(type==='tree'){ baseW=20+Math.random()*20; baseH=50+Math.random()*60; }
+        else if(type==='radio'){ baseW=14+Math.random()*10; baseH=90+Math.random()*80; }
+        else if(type==='horse'){ baseW=40+Math.random()*15; baseH=25+Math.random()*10; }
+        else { baseW=60+Math.random()*50; baseH=50+Math.random()*50; }
+        let newX, attempts=0;
+        const pad=20, extraBarnTree=100, extraHorseGap=60;
+        const groundY=h()-60-baseH;
+        do{
+          newX=w()+100+Math.random()*200;
+          attempts++;
+        }while(
+          groundElements.some(g=>{
+            const centerA=g.x+g.width/2, centerB=newX+baseW/2;
+            const barnTreeGap=((g.type==='barn'&&type==='tree')||(g.type==='tree'&&type==='barn'))?extraBarnTree:0;
+            const horseAvoid=((g.type==='horse'&&type!=='horse')||(type==='horse'&&g.type!=='horse'))?extraHorseGap:0;
+            const minGap=(g.width/2+baseW/2+pad+barnTreeGap+horseAvoid);
+            return Math.abs(centerA-centerB)<minGap;
+          }) && attempts<20
+        );
+        const phase=(type==='horse')?Math.random()*Math.PI*2:0;
+        groundElements.push({x:newX,y:groundY,width:baseW,height:baseH,type,phase});
+      }
+    }
+
+    // Rings: 5 vertical levels within the top 3/5 of the screen
+    const ringLevels=()=>{
+      const top=h()*0.1; // leave headroom
+      const step=(h()*0.6 - top)/4; // top 60%
+      return [0,1,2,3,4].map(i=>top + i*step);
+    };
+    function spawnRing(){
+      const levels=ringLevels();
+      const i = Math.floor(Math.random()*levels.length);
+      const y = levels[i];
+      const laneName = `Ring ${i+1}`; // 1..5 top->bottom
+      rings.push({x:w()+80,y,radius:30,glow:0,collected:false,lane:i+1,name:laneName});
+    });
+    }
+
+    // === Drawing helpers ===
+    function drawCloud(c){
+      const t=dayToDuskT();
+      ctx.fillStyle=lerpColor([255,255,255],[255,230,210],t);
+      ctx.beginPath(); ctx.ellipse(c.x,c.y,c.size,c.size*0.6,0,0,Math.PI*2); ctx.fill();
+    }
+
+    function shadeColorRGB(rgb, amt){
+      const k=1-amt; return `rgb(${Math.round(rgb[0]*k)},${Math.round(rgb[1]*k)},${Math.round(rgb[2]*k)})`;
+    }
+
+    function drawGroundElement(g){
+      const t=dayToDuskT();
+      const shadowLen=lerp(3,12,t);
+      const sx=Math.cos(sunlightAngle)*shadowLen;
+      const sy=Math.sin(sunlightAngle)*shadowLen;
+
+      if(g.type==='farmhouse'){
+        // body
+        ctx.save();
+        const wall=[222,184,135];
+        ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
+        ctx.fillStyle=shadeColorRGB(wall, t*0.25); ctx.fillRect(g.x,g.y,g.width,g.height);
+        ctx.shadowColor='transparent';
+        // door
+        const dW=g.width*0.2,dH=g.height*0.4,dX=g.x+g.width*0.4,dY=g.y+g.height*0.6;
+        ctx.fillStyle=shadeColorRGB([139,69,19],t*0.3); ctx.fillRect(dX,dY,dW,dH);
+        // windows with dynamic reflection
+        const winW=g.width*0.2,winH=g.height*0.25;
+        const windows=[{x:g.x+g.width*0.1,y:g.y+g.height*0.25},{x:g.x+g.width*0.7,y:g.y+g.height*0.25}];
+        windows.forEach(wi=>{
+          const grad=ctx.createLinearGradient(wi.x,wi.y,wi.x+winW,wi.y+winH);
+          grad.addColorStop(0,'#b0e0ff'); grad.addColorStop(0.5,'#fff'); grad.addColorStop(1,'#87ceeb');
+          ctx.fillStyle=grad; ctx.fillRect(wi.x,wi.y,winW,winH);
+          ctx.strokeStyle='#000'; ctx.strokeRect(wi.x,wi.y,winW,winH);
+          const strength = 0.5 + 0.5*Math.sin(frameCount*0.01);
+          const offsetX=(Math.sin(frameCount*0.02)+1)*0.15*winW;
+          ctx.beginPath(); ctx.moveTo(wi.x+offsetX, wi.y+winH*0.1); ctx.lineTo(wi.x+offsetX+winW*0.3, wi.y+winH*0.1);
+          ctx.lineWidth=2; ctx.strokeStyle=`rgba(255,255,255,${0.3+0.4*strength})`; ctx.stroke();
+        });
+        // roof
+        ctx.fillStyle=shadeColorRGB([165,42,42],t*0.25);
+        ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-18); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        return;
+      }
+
+      if(g.type==='office'){
+        ctx.save();
+        ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
+        ctx.fillStyle=shadeColorRGB([150,150,150], t*0.3); ctx.fillRect(g.x,g.y,g.width,g.height);
+        ctx.shadowColor='transparent'; ctx.fillStyle=shadeColorRGB([40,40,40], t*0.15);
+        for(let i=0;i<3;i++){ ctx.fillRect(g.x+5+i*(g.width/3),g.y+5,g.width/6,g.height-10); }
+        ctx.restore();
+        return;
+      }
+
+      if(g.type==='tree'){
+        ctx.save();
+        // ground shadow ellipse
+        ctx.fillStyle='rgba(0,0,0,0.25)';
+        ctx.beginPath(); ctx.ellipse(g.x+g.width*0.5+sx, g.y+g.height+4+sy, g.width*0.8, g.width*0.25, 0,0,Math.PI*2); ctx.fill();
+        // trunk
+        ctx.fillStyle=shadeColorRGB([101,67,33], t*0.25);
+        const tw=Math.max(4,g.width*0.2);
+        ctx.fillRect(g.x+g.width*0.4, g.y+g.height*0.35, tw, g.height*0.65);
+        // canopy
+        const leaf=lerpColor([46,139,87],[20,70,40],t);
+        ctx.fillStyle=leaf; const cx=g.x+g.width*0.5, cy=g.y+g.height*0.25, r=Math.max(g.width,g.height*0.45)*0.6;
+        ctx.beginPath(); ctx.ellipse(cx,cy,r,r*0.8,0,0,Math.PI*2); ctx.ellipse(cx-r*0.6,cy+5,r*0.8,r*0.6,0,0,Math.PI*2); ctx.ellipse(cx+r*0.6,cy+5,r*0.8,r*0.6,0,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+        return;
+      }
+
+      if(g.type==='radio'){
+        const baseX=g.x+g.width/2, topY=g.y, botY=g.y+g.height;
+        ctx.strokeStyle='#666'; ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(baseX-g.width/2,botY); ctx.lineTo(baseX-g.width*0.2,topY);
+        ctx.moveTo(baseX+g.width/2,botY); ctx.lineTo(baseX+g.width*0.2,topY);
+        for(let y=0;y<g.height;y+=12){ const yPos=botY-y; const t=(y/g.height); const half=lerp(g.width/2,g.width*0.2,t); ctx.moveTo(baseX-half,yPos); ctx.lineTo(baseX+half,yPos-6); }
+        ctx.stroke();
+        ctx.fillStyle='#777'; ctx.beginPath(); ctx.arc(baseX, topY-6, 6, 0, Math.PI*2); ctx.fill();
+        return;
+      }
+
+      if(g.type==='barn'){
+        const shadowLen=lerp(3,12,t);
+        const sx=Math.cos(sunlightAngle)*shadowLen;
+        const sy=Math.sin(sunlightAngle)*shadowLen;
+        ctx.save();
+        ctx.fillStyle='#8b0000'; ctx.fillRect(g.x,g.y,g.width,g.height);
+        ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
+        ctx.strokeStyle='white'; ctx.lineWidth=3; ctx.strokeRect(g.x,g.y,g.width,g.height);
+        ctx.shadowColor='transparent';
+        const doorX=g.x+g.width/3, doorY=g.y+g.height*0.6, doorW=g.width/3, doorH=g.height*0.4;
+        ctx.save(); ctx.clearRect(doorX,doorY,doorW,doorH); ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.strokeRect(doorX,doorY,doorW,doorH); ctx.restore();
+        ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
+        ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-20); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        return;
+      }
+
+      if(g.type==='horse'){
+        const bob=Math.sin(frameCount*0.1 + g.phase)*2;
+        const legPhase=(frameCount*0.2 + g.phase);
+        const legOffset=Math.sin(legPhase)*2;
+        const yBase=g.y + bob;
+        ctx.fillStyle='#654321'; ctx.fillRect(g.x, yBase+g.height*0.4, g.width, g.height*0.6);
+        const nx=g.x+g.width*0.15, ny=yBase+g.height*0.1, nw=g.width*0.35, nh=g.height*0.4;
+        ctx.fillStyle='#4b3621'; ctx.fillRect(nx, ny, nw, nh);
+        ctx.fillStyle='#3b2a1a'; for(let i=0;i<4;i++){ const px=nx + i*(nw/4); const flick=4 + 3*Math.max(0, Math.sin(frameCount*0.3 + g.phase + i)); ctx.beginPath(); ctx.moveTo(px,ny); ctx.lineTo(px+nw/8,ny-flick); ctx.lineTo(px+nw/4,ny); ctx.closePath(); ctx.fill(); }
+        ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(g.x+g.width*0.45, yBase+g.height*0.05, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='#4b3621';
+        for(let i=0;i<4;i++){ const lx=g.x+g.width*(0.1+0.25*i/3); ctx.fillRect(lx+legOffset, yBase+g.height*0.9, 3, g.height*0.1); if(frameCount%8===0 && Math.random()<0.3){ dustParticles.push({x:lx+legOffset, y:yBase+g.height, size:2+Math.random()*2, alpha:1, vy:-0.5-Math.random()}); } }
+        const rx=g.x, ry=yBase+g.height*0.45, sway=Math.sin(frameCount*0.25 + g.phase)*(g.height*0.08);
+        ctx.strokeStyle='#3b2a1a'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(rx,ry); ctx.quadraticCurveTo(rx-g.width*0.15, ry+sway, rx-g.width*0.35, ry+sway*1.5); ctx.stroke();
+        ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.strokeRect(g.x,yBase,g.width,g.height);
+        return;
+      }
+
+      // default block (fallback)
+      ctx.fillStyle='#8B4513'; ctx.fillRect(g.x,g.y,g.width,g.height);
+    }
+
+    function updateDust(speed){
+      for(const p of dustParticles){ p.x-=speed; p.y+=p.vy; p.alpha-=0.02; }
+      dustParticles=dustParticles.filter(p=>p.alpha>0);
+      ctx.fillStyle='rgba(139,69,19,0.5)';
+      for(const p of dustParticles){ ctx.globalAlpha=p.alpha; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+    }
+
+    // === Plane ===
+    function drawPlane(){
+      ctx.save(); ctx.translate(plane.x,plane.y);
+      // fuselage
+      ctx.fillStyle='#c33'; ctx.beginPath(); ctx.ellipse(0,0,35,10,0,0,Math.PI*2); ctx.fill();
+      // wings
+      ctx.fillStyle='#b00'; ctx.fillRect(-30,-20,60,5); ctx.fillRect(-30,15,60,5);
+      // tail
+      ctx.fillStyle='#a00'; ctx.fillRect(-40,-5,10,10); ctx.beginPath(); ctx.moveTo(-45,0); ctx.lineTo(-55,-10); ctx.lineTo(-55,10); ctx.closePath(); ctx.fill();
+      // gear
+      ctx.strokeStyle='#222'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-15,15); ctx.lineTo(-20,30); ctx.moveTo(15,15); ctx.lineTo(20,30); ctx.stroke();
+      ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(-20,32,4,0,Math.PI*2); ctx.arc(20,32,4,0,Math.PI*2); ctx.fill();
+      // propeller
+      plane.propAngle+=0.3; ctx.save(); ctx.translate(35,0); ctx.rotate(plane.propAngle); ctx.strokeStyle='#222'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(10,0); ctx.moveTo(0,-10); ctx.lineTo(0,10); ctx.stroke(); ctx.restore();
+      ctx.restore();
+    }
+
+    function drawRings(){
+      ctx.save();
+      ctx.font='12px system-ui, sans-serif';
+      ctx.fillStyle='#222';
+      for(const r of rings){
+        if(!r.collected){ r.glow=(r.glow+0.06)%1; const a=0.5+0.5*Math.sin(r.glow*Math.PI*2); ctx.strokeStyle=`rgba(255,255,0,${0.6+0.4*a})`; ctx.lineWidth=4+2*a; }
+        else { ctx.strokeStyle='rgba(255,255,0,0.25)'; ctx.lineWidth=2; }
+        ctx.beginPath(); ctx.arc(r.x,r.y,r.radius,0,Math.PI*2); ctx.stroke();
+        if(!r.collected){ ctx.fillText(r.name, r.x-18, r.y-r.radius-6); }
+      }
+      ctx.restore();
+    }
+        else { ctx.strokeStyle='rgba(255,255,0,0.25)'; ctx.lineWidth=2; }
+        ctx.beginPath(); ctx.arc(r.x,r.y,r.radius,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function checkRingCollisions(){
+      for(const r of rings){ if(!r.collected){ const dx=plane.x - r.x, dy=plane.y - r.y; if(Math.hypot(dx,dy) < r.radius){ r.collected=true; r.glow=0; playChime(); } } }
+      rings=rings.filter(r=> !(r.collected && (r.x < -r.radius)) );
+    }
+      // remove collected rings after a short delay glow fade
+      rings=rings.filter(r=> !(r.collected && (r.x < -r.radius)) );
+    }
+
+    // === World step ===
+    function worldStep(speed){
+      drawSky();
+
+      // input: W/S immediate, no momentum
+      if(keys['w']) plane.y-=2;
+      if(keys['s']) plane.y+=2;
+      // clamp above ground
+      const floorY=h()-60-10; if(plane.y>floorY) plane.y=floorY; if(plane.y<10) plane.y=10;
+
+      // progress & spawns
+      distCloud+=speed; distGround+=speed; distRing+=speed;
+      if(distCloud>=DIST_CLOUD){ spawnClouds(); distCloud=0; }
+      if(distGround>=DIST_GROUND){ spawnGroundElements(); distGround=0; }
+      if(distRing>=DIST_RING){ spawnRing(); distRing=0; }
+
+      // scroll world (Shift only affects horizontal, not vertical)
+      for(const c of clouds) c.x -= speed*0.6;
+      for(const g of groundElements) g.x -= speed;
+      for(const r of rings) r.x -= speed;
+      for(const b of bullets) b.x += (b.speed - speed);
+
+      // cull
+      clouds=clouds.filter(c=>c.x>-c.size);
+      groundElements=groundElements.filter(g=>g.x>-g.width);
+      rings=rings.filter(r=>r.x>-r.radius || !r.collected);
+      bullets=bullets.filter(b=>b.x < w()+40);
+
+      // draw
+      clouds.forEach(drawCloud);
+      groundElements.forEach(drawGroundElement);
+      updateDust(speed);
+      drawRings();
+      // bullets
+      drawBullets();
+      drawPlane();
+
+      // ring collect
+      checkRingCollisions();
+    }
+
+    function update(){
+      frameCount++;
+      sunlightAngle += 0.002; // move sun slowly
+      const speed=currentScrollSpeed();
+      worldStep(speed);
+      requestAnimationFrame(update);
+    }
+
+    // seed: a few clouds & a visible farmhouse
+    (function seedDemo(){
+      groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0;
+      const bw=120,bh=100;
+      groundElements.push({x:Math.max(40,Math.min(200,w()-bw-40)), y:h()-60-bh, width:bw, height:bh, type:'farmhouse'});
+      for(let i=0;i<3;i++){ clouds.push({x:80+i*140, y:40+i*20, size:30+10*i}); }
+    \})();// seedDemo
+
+    // === Audio ===
+    let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
+    const muteBtn=document.getElementById('mute');
+    function initAudio(){
+      if(audioInited) return; audioInited=true;
+      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      // engine hum: sawtooth ~140Hz with gentle tremolo
+      engineOsc=audioCtx.createOscillator(); engineOsc.type='sawtooth'; engineOsc.frequency.value=140;
+      engineGain=audioCtx.createGain(); engineGain.gain.value=0.04; // base volume
+      lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=3.2; // oscillation
+      lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.02; // depth
+      lfoOsc.connect(lfoGain); lfoGain.connect(engineGain.gain);
+      engineOsc.connect(engineGain).connect(audioCtx.destination);
+      engineOsc.start(); lfoOsc.start();
+    }
+    function setMuted(m){
+      muted=m; muteBtn.textContent = muted ? '🔇' : '🔊';
+      if(!audioCtx) return;
+      if(muted && audioCtx.state==='running') audioCtx.suspend();
+      else if(!muted && audioCtx.state==='suspended') audioCtx.resume();
+    }
+    muteBtn.addEventListener('click',()=>{ if(!audioInited) initAudio(); setMuted(!muted); });
+
+    function quickBeep(freq=880, dur=0.12, vol=0.08){ if(!audioCtx||muted||audioCtx.state!=='running') return; const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; g.gain.value=vol; o.connect(g).connect(audioCtx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+dur); o.stop(audioCtx.currentTime+dur); }
+    function playChime(){ quickBeep(1200,0.15,0.1); }
+    function playPop(){ quickBeep(220,0.08,0.08); }
+
+    // === Bullets ===
+    function fireBullet(){ bullets.push({x:plane.x+40, y:plane.y, speed:6}); playPop(); }
+    function drawBullets(){ ctx.fillStyle='yellow'; for(const b of bullets){ ctx.beginPath(); ctx.arc(b.x,b.y,2.5,0,Math.PI*2); ctx.fill(); } }
+
+    update();
+  </script>
+</body>
+</html>
