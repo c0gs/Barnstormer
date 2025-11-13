@@ -104,8 +104,23 @@
         // moon (opposite the sun)
         const moonX = w()*0.5 - Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
         const moonY = h()*0.22 - Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
+        const moonRadius = 28;
         ctx.fillStyle = `rgba(255,245,220,${0.6*nightFactor})`;
-        ctx.beginPath(); ctx.arc(moonX, moonY, 28, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(moonX, moonY, moonRadius, 0, Math.PI*2); ctx.fill();
+        
+        // craters on moon
+        ctx.fillStyle = `rgba(180,180,200,${0.4*nightFactor})`;
+        // larger craters
+        ctx.beginPath(); ctx.arc(moonX - 8, moonY - 10, 5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(moonX + 12, moonY - 5, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(moonX + 5, moonY + 12, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(moonX - 15, moonY + 8, 3, 0, Math.PI*2); ctx.fill();
+        // smaller craters for detail
+        ctx.fillStyle = `rgba(160,160,180,${0.3*nightFactor})`;
+        ctx.beginPath(); ctx.arc(moonX + 8, moonY + 2, 2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(moonX - 10, moonY - 2, 1.8, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(moonX + 14, moonY + 10, 2.2, 0, Math.PI*2); ctx.fill();
+        
         ctx.restore();
       }
 
@@ -130,31 +145,40 @@
         const r=Math.random();
         let type=(r<0.14)?'farmhouse':(r<0.28)?'office':(r<0.42)?'barn':(r<0.56)?'tree':(r<0.70)?'radio':(r<0.80)?'silo':(r<0.88)?'water':'horse';
         // sizes — choose ranges appropriate to the element type
+        // Height hierarchy: horses < trees < farmhouse < barn < silo < water tower, office < radio tower
         let baseW, baseH;
         if(type === 'tree'){
-          // trees smaller: narrow and shorter than before
+          // trees: taller than horses, shorter than farmhouse
           baseW = 18 + Math.random()*20; // 18..38
-          baseH = 40 + Math.random()*60; // 40..100
+          baseH = 50 + Math.random()*80; // 50..130
         } else if(type === 'radio'){
-          // radio towers are very skinny but tall
+          // radio towers: tallest
           baseW = 10 + Math.random()*10; // 10..20 (thinner)
-          baseH = 120 + Math.random()*160; // 120..280
+          baseH = 220 + Math.random()*160; // 220..380
         } else if(type === 'horse'){
-          // horses are small low-profile objects
+          // horses: smallest, low-profile objects
           baseW = 28 + Math.random()*24; // 28..52
           baseH = 14 + Math.random()*14; // 14..28
         } else if(type === 'office'){
-          // office buildings: make them thinner than before
-          baseW = 80 + Math.random()*100; // 80..180 (thinner)
-          baseH = 80 + Math.random()*160; // 80..240
+          // office buildings: taller than silo, comparable to water tower
+          baseW = 80 + Math.random()*100; // 80..180
+          baseH = 180 + Math.random()*140; // 180..320
         } else if(type === 'barn'){
-          // barns: reduce width to be less wide
-          baseW = 100 + Math.random()*100; // 100..200 (thinner)
-          baseH = 70 + Math.random()*90; // 70..160
+          // barns: taller than farmhouse, shorter than silo
+          baseW = 100 + Math.random()*100; // 100..200
+          baseH = 120 + Math.random()*90; // 120..210
         } else if(type === 'farmhouse'){
-          // farmhouse: make slightly narrower
+          // farmhouse: taller than trees, shorter than barn
           baseW = 60 + Math.random()*70; // 60..130
-          baseH = 60 + Math.random()*60; // 60..120
+          baseH = 80 + Math.random()*80; // 80..160
+        } else if(type === 'silo'){
+          // silo: taller than barn, shorter than water tower
+          baseW = 40 + Math.random()*50; // 40..90
+          baseH = 150 + Math.random()*110; // 150..260
+        } else if(type === 'water'){
+          // water tower: taller than silo, thinner profile
+          baseW = 35 + Math.random()*35; // 35..70
+          baseH = 160 + Math.random()*140; // 160..300
         } else {
           // fallback block
           baseW = 50 + Math.random()*40;
@@ -220,7 +244,26 @@
       const i = Math.floor(Math.random()*levels.length);
       const y = levels[i];
       const laneName = `Ring ${i+1}`; // 1..5 top->bottom
-      rings.push({x:w()+80,y,radius:30,glow:0,collected:false,lane:i+1,name:laneName});
+      const ringRadius = 30;
+      const ringX = w() + 80;
+      
+      // check if ring would collide with any building
+      let collides = false;
+      for(const g of groundElements){
+        const dx = ringX - (g.x + g.width/2);
+        const dy = y - (g.y + g.height/2);
+        const dist = Math.hypot(dx, dy);
+        const minDist = ringRadius + Math.max(g.width, g.height)/2 + 20; // buffer zone
+        if(dist < minDist){
+          collides = true;
+          break;
+        }
+      }
+      
+      // only spawn if no collision
+      if(!collides){
+        rings.push({x:ringX,y,radius:ringRadius,glow:0,collected:false,lane:i+1,name:laneName});
+      }
     }
 
     // === Drawing helpers ===
@@ -253,14 +296,30 @@
         const dW=g.width*0.2,dH=g.height*0.4,dX=g.x+g.width*0.4,dY=g.y+g.height*0.6;
         ctx.fillStyle=shadeColorRGB([139,69,19],t*0.3); ctx.fillRect(dX,dY,dW,dH);
         ctx.strokeRect(dX,dY,dW,dH);
-        // windows with dynamic reflection
+        // windows with dynamic reflection and night glow
         const winW=g.width*0.2,winH=g.height*0.25;
         const windows=[{x:g.x+g.width*0.1,y:g.y+g.height*0.25},{x:g.x+g.width*0.7,y:g.y+g.height*0.25}];
         windows.forEach(wi=>{
+          // window color transitions from blue (day) to warm yellow (night)
+          const nightGlow = t > 0.5 ? (t - 0.5) * 2 : 0; // glow factor for night
+          const dayColor = 'rgba(255,255,255,0.85)';
+          const nightColor = `rgba(255,240,150,${0.7 + nightGlow * 0.3})`; // warmer and brighter at night
+          const blendColor = t < 0.5 ? dayColor : nightColor;
+          
           const grad=ctx.createLinearGradient(wi.x,wi.y,wi.x,wi.y+winH);
-          grad.addColorStop(0,'rgba(255,255,255,0.85)'); grad.addColorStop(0.4,'#b0e0ff'); grad.addColorStop(1,'#87ceeb');
+          grad.addColorStop(0, blendColor);
+          grad.addColorStop(0.4, t < 0.5 ? '#b0e0ff' : `rgba(255,220,100,${0.8 + nightGlow * 0.2})`);
+          grad.addColorStop(1, t < 0.5 ? '#87ceeb' : `rgba(255,210,80,${0.6 + nightGlow * 0.2})`);
           ctx.fillStyle=grad; ctx.fillRect(wi.x,wi.y,winW,winH);
+          
+          // glow effect at night
+          if(nightGlow > 0){
+            ctx.shadowColor = `rgba(255,200,100,${nightGlow * 0.4})`;
+            ctx.shadowBlur = 8 * nightGlow;
+          }
           ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wi.x,wi.y,winW,winH);
+          ctx.shadowColor = 'transparent';
+          
           // specular highlight
           ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wi.x+winW*0.12, wi.y+winH*0.08, winW*0.5, winH*0.18);
         });
@@ -290,17 +349,28 @@
           for(let cx=0; cx<cols; cx++){
             const wx = Math.round(g.x + gapX + cx*(winW+gapX));
             const wy = Math.round(g.y + gapY + ry*(winH+gapY));
-            // windows get warmer color toward dusk/night (t=0..1)
-            const winColor = lerpColor([40,45,55],[255,230,120], t);
+            // windows get warmer and brighter toward dusk/night
+            const nightGlow = t > 0.5 ? (t - 0.5) * 2 : 0; // glow intensity for night
+            const winColor = lerpColor([40,45,55],[255,240,150], t);
+            const winAlpha = 0.9 + nightGlow * 0.2; // brighter at night
             // reflective vertical gradient: bright at top to window color
             const wg = ctx.createLinearGradient(wx, wy, wx, wy+winH);
-            wg.addColorStop(0, 'rgba(255,255,255,0.9)');
-            wg.addColorStop(0.18, winColor);
-            wg.addColorStop(1, lerpColor([20,25,30],[180,140,90], t));
+            wg.addColorStop(0, t < 0.5 ? 'rgba(255,255,255,0.9)' : `rgba(255,255,200,${winAlpha})`);
+            wg.addColorStop(0.18, `rgba(${winColor[0]},${winColor[1]},${winColor[2]},${winAlpha})`);
+            wg.addColorStop(1, lerpColor([20,25,30],[220,180,100], t));
             ctx.fillStyle = wg;
             ctx.fillRect(wx, wy, winW, winH);
-            // thin outline
-            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+            
+            // glow effect at night
+            if(nightGlow > 0){
+              ctx.shadowColor = `rgba(255,200,100,${nightGlow * 0.3})`;
+              ctx.shadowBlur = 6 * nightGlow;
+              ctx.strokeStyle = `rgba(0,0,0,0.5)`; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+              ctx.shadowColor = 'transparent';
+            } else {
+              ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+            }
+            
             // subtle specular highlight (top-left)
             ctx.fillStyle = 'rgba(255,255,255,0.16)';
             ctx.fillRect(wx + Math.round(winW*0.12), wy + Math.round(winH*0.08), Math.round(winW*0.45), Math.round(winH*0.16));
@@ -380,9 +450,9 @@
         ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
         // sliding double-doors: two panels that slide sideways based on g.doorProgress
-        const doorTotalW = Math.max(24, Math.floor(g.width * 0.33));
-        const doorY = g.y + g.height * 0.6;
-        const doorH = Math.max(12, Math.floor(g.height * 0.4));
+        const doorTotalW = Math.max(50, Math.floor(g.width * 0.5));
+        const doorY = g.y + g.height * 0.5;
+        const doorH = Math.max(40, Math.floor(g.height * 0.5));
         const leftPanelW = Math.ceil(doorTotalW / 2);
         const rightPanelW = doorTotalW - leftPanelW;
         const closedLeftX = Math.round(g.x + (g.width - doorTotalW) / 2);
@@ -391,8 +461,13 @@
         const openOffsetRight = Math.round((rightPanelW + 8) * (g.doorProgress || 0));
         const leftX = closedLeftX - openOffsetLeft;
         const rightX = closedRightX + openOffsetRight;
-        // opening: clear the door aperture so the sky drawn earlier shows through
-        ctx.clearRect(closedLeftX, doorY, doorTotalW, doorH);
+        // opening: clear the door aperture (the gap between the panels) so the sky shows through
+        const apertureLeft = leftX + leftPanelW;
+        const apertureRight = rightX;
+        const apertureW = apertureRight - apertureLeft;
+        if(apertureW > 0){
+          ctx.clearRect(apertureLeft, doorY - 2, apertureW, doorH + 4); // slight padding for cleaner look
+        }
 
         // draw left panel
         ctx.save();
@@ -433,11 +508,26 @@
         // body
         const baseColor = shadeColorRGB([190,190,200], t*0.08);
         ctx.fillStyle = baseColor; ctx.fillRect(bx, by, bodyW, bodyH);
-        // top ellipse
+
+        // ladder on the side (right side) - vertical rails + rungs
+        const ladderX = Math.round(bx + bodyW*0.82);
+        const railOffset = 4;
+        ctx.strokeStyle = 'rgba(70,70,80,0.95)'; ctx.lineWidth = 2;
+        // rails
+        ctx.beginPath(); ctx.moveTo(ladderX-railOffset, by+8); ctx.lineTo(ladderX-railOffset, by+bodyH-8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ladderX+railOffset, by+8); ctx.lineTo(ladderX+railOffset, by+bodyH-8); ctx.stroke();
+        // rungs
+        ctx.lineWidth = 1.5;
+        for(let ry = by+14; ry < by + bodyH - 10; ry += 12){ ctx.beginPath(); ctx.moveTo(ladderX-railOffset, ry); ctx.lineTo(ladderX+railOffset, ry); ctx.stroke(); }
+
+        // top ellipse (slightly larger vertical radius to make a rounder dome)
         ctx.fillStyle = shadeColorRGB([210,210,220], t*0.04);
-        ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5, by+4, bodyW*0.52, 8, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5, by+6, bodyW*0.56, 12, 0, 0, Math.PI*2); ctx.fill();
+        // subtle rim highlight
+        ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5, by+4, bodyW*0.52, 6, 0, 0, Math.PI*2); ctx.stroke();
+
         // bands
-        ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1; for(let y=by+8;y<by+bodyH-6;y+=12){ ctx.beginPath(); ctx.moveTo(bx+4,y); ctx.lineTo(bx+bodyW-4,y); ctx.stroke(); }
+        ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1; for(let y=by+12;y<by+bodyH-6;y+=12){ ctx.beginPath(); ctx.moveTo(bx+6,y); ctx.lineTo(bx+bodyW-6,y); ctx.stroke(); }
         // outline
         ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(bx, by, bodyW, bodyH);
         ctx.restore();
@@ -457,15 +547,27 @@
         ctx.beginPath(); ctx.moveTo(lx2, wy+wh); ctx.lineTo(lx2 + 8, legTop); ctx.lineTo(lx2, legTop); ctx.stroke();
         // central support
         ctx.beginPath(); ctx.moveTo(wx+ww*0.5, wy+wh); ctx.lineTo(wx+ww*0.5, legTop+4); ctx.stroke();
-        // tank
-        const tankW = ww * 1.2; const tankH = Math.max(18, Math.round(wh*0.18));
+        // tank: make the top rounder (taller dome) and add smoother shading
+        const tankW = ww * 1.2; const tankH = Math.max(18, Math.round(wh*0.16));
         const tankX = Math.round(wx + (ww - tankW)/2);
-        const tankY = legTop - tankH - 2;
-        ctx.fillStyle = shadeColorRGB([160,180,200], t*0.05);
-        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + 6, tankW*0.5, 8, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillRect(tankX, tankY+6, tankW, tankH);
-        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + 6 + tankH, tankW*0.5, 6, 0, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(tankX, tankY+6, tankW, tankH);
+        const tankY = legTop - tankH - 6; // shift up a bit for bigger dome
+        // dome (upper cap) with larger vertical radius for a rounder look
+        const domeRadiusY = 14; const domeRadiusX = tankW*0.52;
+        // glossy gradient for tank
+        const tankGrad = ctx.createLinearGradient(tankX, tankY, tankX, tankY + tankH + domeRadiusY);
+        tankGrad.addColorStop(0, lerpColor([230,240,250],[200,220,230], t*0.2));
+        tankGrad.addColorStop(0.4, lerpColor([200,220,230],[170,190,200], t*0.08));
+        tankGrad.addColorStop(1, lerpColor([160,180,200],[140,160,180], t*0.02));
+        ctx.fillStyle = tankGrad;
+        // dome
+        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY, domeRadiusX, domeRadiusY, 0, Math.PI, 0, true); ctx.fill();
+        // body
+        ctx.fillRect(tankX, tankY + domeRadiusY, tankW, tankH);
+        // bottom rim ellipse
+        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY + tankH, domeRadiusX, domeRadiusY*0.6, 0, 0, Math.PI*2); ctx.fill();
+        // rim highlight
+        ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY-2, domeRadiusX*0.92, domeRadiusY*0.82, 0, Math.PI*0.1, Math.PI*0.9); ctx.stroke();
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(tankX, tankY + domeRadiusY, tankW, tankH);
         ctx.restore();
         return;
       }
@@ -721,13 +823,13 @@
           if(px < gx + gw && px + pw > gx && py < gy + gh && py + ph > gy){
             // if it's a barn, allow passage through the door when fully open and plane is inside the door area
             if(g.type==='barn'){
-              const doorTotalW = Math.max(24, Math.floor(g.width * 0.33));
+              const doorTotalW = Math.max(50, Math.floor(g.width * 0.5));
               const leftPanelW = Math.ceil(doorTotalW / 2);
               const rightPanelW = doorTotalW - leftPanelW;
               const closedLeftX = Math.round(g.x + (g.width - doorTotalW) / 2);
               const closedRightX = closedLeftX + leftPanelW;
-              const doorY = g.y + g.height * 0.6;
-              const doorH = Math.max(12, Math.floor(g.height * 0.4));
+              const doorY = g.y + g.height * 0.5;
+              const doorH = Math.max(40, Math.floor(g.height * 0.5));
               const openOffsetLeft = Math.round((leftPanelW + 8) * (g.doorProgress || 0));
               const openOffsetRight = Math.round((rightPanelW + 8) * (g.doorProgress || 0));
               const leftX = closedLeftX - openOffsetLeft;
@@ -735,11 +837,14 @@
               const apertureLeft = leftX + leftPanelW;
               const apertureRight = rightX;
               const apertureW = apertureRight - apertureLeft;
-              // allow passage if there's a real opening and the plane overlaps the door vertically
-              const planeVertOverlapDoor = (py < doorY + doorH) && (py + ph > doorY);
-              const planeHorizIntersectsAperture = (px + pw > apertureLeft) && (px < apertureRight);
-              if(apertureW > 8 && planeVertOverlapDoor && planeHorizIntersectsAperture){
-                continue; // plane is at door level and within the aperture — allow passage
+              // allow passage if door is sufficiently open AND plane center X is within the aperture AND plane overlaps door vertically
+              const doorOpen = (g.doorProgress || 0) > 0.3; // door must be at least 30% open
+              const planeCenterX = plane.x;
+              const planeCenterY = plane.y;
+              const planeXInAperture = (planeCenterX > apertureLeft) && (planeCenterX < apertureRight);
+              const planeYInDoor = (planeCenterY > doorY - 20) && (planeCenterY < doorY + doorH + 20);
+              if(doorOpen && planeXInAperture && planeYInDoor){
+                continue; // plane is centered in the aperture — allow passage
               }
             }
             crashPlane(); break;
