@@ -38,6 +38,7 @@
       // crash state
       alive:true, crashed:false
     };
+    let paused = false;
     let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
     const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
     let distRing=0,distGround=0,distCloud=0;
@@ -327,11 +328,36 @@
       plane.alive = false;
       plane.crashed = true;
       plane.propAngle = 0;
-      const hud = document.getElementById('hud');
-      if(hud) hud.textContent = 'CRASHED';
+      paused = true;
       try{ playChime(); }catch(e){}
       // spawn crash dust
       for(let i=0;i<20;i++){ dustParticles.push({x:plane.x + (Math.random()*80-40), y:plane.y + (Math.random()*40-20), size:2+Math.random()*4, alpha:1, vy:-1-Math.random()*2}); }
+
+      // create overlay with restart button
+      const existing = document.getElementById('crashOverlay');
+      if(existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'crashOverlay';
+      overlay.style.position = 'fixed';
+      overlay.style.left = '0';
+      overlay.style.top = '0';
+      overlay.style.width = '100%';
+      overlay.style.height = '100%';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center';
+      overlay.style.justifyContent = 'center';
+      overlay.style.background = 'rgba(0,0,0,0.45)';
+      overlay.style.zIndex = '9999';
+      overlay.innerHTML = `
+        <div style="background:#fff;padding:18px 24px;border-radius:12px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.4);">
+          <div style="font-weight:800;margin-bottom:10px;color:#c00;font-size:20px;">CRASHED</div>
+          <div style="margin-bottom:16px;color:#333">You collided — restart?</div>
+          <button id="restartBtn" style="padding:8px 14px;border-radius:8px;border:0;background:#0078d4;color:#fff;cursor:pointer">Restart</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const btn = document.getElementById('restartBtn');
+      if(btn) btn.addEventListener('click', ()=>{ overlay.remove(); restartGame(); });
     }
 
     // === World step ===
@@ -433,6 +459,9 @@
         }
       }
 
+      // handle paused state: if paused, do not continue the animation loop further
+      if(paused) return;
+
       // draw
       clouds.forEach(drawCloud);
       groundElements.forEach(drawGroundElement);
@@ -451,16 +480,17 @@
       sunlightAngle += 0.002; // move sun slowly
       const speed=currentScrollSpeed();
       worldStep(speed);
-      requestAnimationFrame(update);
+      if(!paused) requestAnimationFrame(update);
     }
 
     // seed: a few clouds & a visible farmhouse
-    (function seedDemo(){
-      groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0;
+    function seedDemo(){
+      groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0; bullets.length=0;
       const bw=120,bh=100;
       groundElements.push({x:Math.max(40,Math.min(200,w()-bw-40)), y:h()-60-bh, width:bw, height:bh, type:'farmhouse'});
       for(let i=0;i<3;i++){ clouds.push({x:80+i*140, y:40+i*20, size:30+10*i}); }
-    })(); // seedDemo
+    }
+    seedDemo(); // seedDemo
 
     // === Audio ===
     let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
@@ -488,6 +518,19 @@
     function quickBeep(freq=880, dur=0.12, vol=0.08){ if(!audioCtx||muted||audioCtx.state!=='running') return; const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; g.gain.value=vol; o.connect(g).connect(audioCtx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+dur); o.stop(audioCtx.currentTime+dur); }
     function playChime(){ quickBeep(1200,0.15,0.1); }
     function playPop(){ quickBeep(220,0.08,0.08); }
+
+    function restartGame(){
+      // clear world
+      groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0; bullets.length=0;
+      // reset plane
+      plane.alive = true; plane.crashed = false; plane.angle = 0; plane.propAngle = 0; plane.loopActive = false; plane.loopProgress = 0;
+      plane.y = h()/2;
+      paused = false;
+      // reseed a simple scene
+      seedDemo();
+      // resume loop
+      requestAnimationFrame(update);
+    }
 
     // === Bullets ===
     function fireBullet(){ bullets.push({x:plane.x+40, y:plane.y, speed:6}); playPop(); }
