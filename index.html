@@ -121,7 +121,6 @@
       const y = levels[i];
       const laneName = `Ring ${i+1}`; // 1..5 top->bottom
       rings.push({x:w()+80,y,radius:30,glow:0,collected:false,lane:i+1,name:laneName});
-    });
     }
 
     // === Drawing helpers ===
@@ -285,18 +284,21 @@
       }
       ctx.restore();
     }
-        else { ctx.strokeStyle='rgba(255,255,0,0.25)'; ctx.lineWidth=2; }
-        ctx.beginPath(); ctx.arc(r.x,r.y,r.radius,0,Math.PI*2); ctx.stroke();
-      }
-      ctx.restore();
-    }
 
     function checkRingCollisions(){
-      for(const r of rings){ if(!r.collected){ const dx=plane.x - r.x, dy=plane.y - r.y; if(Math.hypot(dx,dy) < r.radius){ r.collected=true; r.glow=0; playChime(); } } }
-      rings=rings.filter(r=> !(r.collected && (r.x < -r.radius)) );
-    }
-      // remove collected rings after a short delay glow fade
-      rings=rings.filter(r=> !(r.collected && (r.x < -r.radius)) );
+      for(const r of rings){
+        if(!r.collected){
+          const dx = plane.x - r.x;
+          const dy = plane.y - r.y;
+          if(Math.hypot(dx,dy) < r.radius){
+            r.collected = true;
+            r.glow = 0;
+            playChime();
+          }
+        }
+      }
+      // remove collected rings after a short delay / when offscreen
+      rings = rings.filter(r => !(r.collected && (r.x < -r.radius)) );
     }
 
     // === World step ===
@@ -354,7 +356,7 @@
       const bw=120,bh=100;
       groundElements.push({x:Math.max(40,Math.min(200,w()-bw-40)), y:h()-60-bh, width:bw, height:bh, type:'farmhouse'});
       for(let i=0;i<3;i++){ clouds.push({x:80+i*140, y:40+i*20, size:30+10*i}); }
-    \})();// seedDemo
+    })(); // seedDemo
 
     // === Audio ===
     let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
