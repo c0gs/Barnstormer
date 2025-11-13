@@ -161,7 +161,7 @@
         } else if(type === 'radio'){
           // radio towers: tallest
           baseW = 10 + Math.random()*10; // 10..20 (thinner)
-          baseH = 180 + Math.random()*100; // 180..280
+          baseH = 180 + Math.random()*200; // 180..380
         } else if(type === 'horse'){
           // horses: smallest, low-profile objects
           baseW = 28 + Math.random()*24; // 28..52
@@ -173,19 +173,19 @@
         } else if(type === 'barn'){
           // barns: taller than farmhouse, shorter than silo
           baseW = 100 + Math.random()*100; // 100..200
-          baseH = 120 + Math.random()*90; // 120..210
+          baseH = 100 + Math.random()*60; // 100..160
         } else if(type === 'farmhouse'){
           // farmhouse: taller than trees, shorter than barn
           baseW = 60 + Math.random()*70; // 60..130
-          baseH = 80 + Math.random()*80; // 80..160
+          baseH = 60 + Math.random()*60; // 60..120
         } else if(type === 'silo'){
           // silo: taller than barn, shorter than water tower
           baseW = 40 + Math.random()*50; // 40..90
           baseH = 150 + Math.random()*110; // 150..260
         } else if(type === 'water'){
-          // water tower: taller than silo, thinner profile
+          // water tower: taller than silo, shorter than radio towers
           baseW = 35 + Math.random()*35; // 35..70
-          baseH = 160 + Math.random()*140; // 160..300
+          baseH = 160 + Math.random()*15; // 160..175 (always shorter than min radio tower of 180)
         } else {
           // fallback block
           baseW = 50 + Math.random()*40;
@@ -277,7 +277,7 @@
     function drawCloud(c){
       const t=dayToDuskT();
       const baseColor = lerpColorStr([255,255,255],[255,230,210],t);
-      const shadowColor = lerpColorStr([220,225,235],[240,210,190],t);
+      const shadowColor = lerpColorStr([200,210,220],[220,190,170],t);
       
       // multi-puff cloud with varied sizes based on variation seed
       const variation = c.variation || 0.5;
@@ -299,7 +299,7 @@
       
       // add shadow detail on lower puffs for depth
       ctx.fillStyle = shadowColor;
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.5;
       ctx.beginPath();
       ctx.ellipse(c.x - c.size*0.5, c.y + c.size*0.2, c.size*0.5, c.size*0.35, 0, 0, Math.PI*2);
       ctx.fill();
@@ -616,8 +616,8 @@
 
       // Calculate frame size from the loaded sprite sheet (2x2 grid)
       const spriteSize = planeSprite.width / 2; // Each frame is half the total width
-      const displaySize = spriteSize * 0.1; // Make plane 10% of original size
-      const frameIndex = Math.floor(frameCount / 10) % 4; // Cycle through 4 frames
+      const displaySize = spriteSize * 0.15; // Make plane 15% of original size (50% larger than 10%)
+      const frameIndex = Math.floor(frameCount / 33) % 4; // Cycle through 4 frames (70% slower)
       const sx = (frameIndex % 2) * spriteSize; // Source x in the sprite sheet
       const sy = Math.floor(frameIndex / 2) * spriteSize; // Source y in the sprite sheet
 
