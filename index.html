@@ -33,7 +33,7 @@
     const w=()=>canvas.clientWidth, h=()=>canvas.clientHeight;
     const plane={x:150,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
       // looping state: when true, plane will perform continuous loops driven by A/D
-      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.12
+      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.04
     };
     let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
     const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
@@ -362,6 +362,14 @@
       if(distCloud>=DIST_CLOUD){ spawnClouds(); distCloud=0; }
       if(distGround>=DIST_GROUND){ spawnGroundElements(); distGround=0; }
       if(distRing>=DIST_RING){ spawnRing(); distRing=0; }
+
+      // movement: let the plane move in the direction it's facing
+      // apply a portion of the scroll speed along the plane heading so it flies where it points
+      const headingSpeedFactor = 0.6;
+      const vx = Math.cos(plane.angle) * speed * headingSpeedFactor;
+      const vy = Math.sin(plane.angle) * speed * headingSpeedFactor;
+      plane.x += vx;
+      plane.y += vy;
 
       // scroll world (Shift only affects horizontal, not vertical)
       for(const c of clouds) c.x -= speed*0.6;
