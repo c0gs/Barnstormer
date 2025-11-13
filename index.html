@@ -241,7 +241,7 @@
           baseH = 100 + Math.random()*60; // 100..160
         } else if(type === 'farmhouse'){
           // farmhouse: taller than trees, shorter than barn
-          baseW = 60 + Math.random()*70; // 60..130
+          baseW = 80 + Math.random()*50; // 80..130
           baseH = 60 + Math.random()*40; // 60..100
         } else if(type === 'silo'){
           // silo: taller than barn, shorter than water tower
@@ -301,20 +301,24 @@
                     const siloAvoid = ((g.type==='silo'&&type!=='silo')||(type==='silo'&&g.type!=='silo')) ? 120 : 0;
                     const waterAvoid = ((g.type==='water'&&type!=='water')||(type==='water'&&g.type!=='water')) ? 100 : 0;
                     const radioAvoid = ((g.type==='radio'&&type!=='radio')||(type==='radio'&&g.type!=='radio')) ? 150 : 0;
-                    const barnSiloAvoid = ((g.type==='barn'&&type==='silo')||(g.type==='silo'&&type==='barn')) ? 100 : 0;
-                    const barnFarmhouseAvoid = ((g.type==='barn'&&type==='farmhouse')||(g.type==='farmhouse'&&type==='barn')) ? 60 : 0;
-                    const barnOfficeAvoid = ((g.type==='barn'&&type==='office')||(g.type==='office'&&type==='barn')) ? 140 : 0;
+                    const barnSiloAvoid = ((g.type==='barn'&&type==='silo')||(g.type==='silo'&&type==='barn')) ? 140 : 0;
+                    const barnFarmhouseAvoid = ((g.type==='barn'&&type==='farmhouse')||(g.type==='farmhouse'&&type==='barn')) ? 100 : 0;
+                    const barnOfficeAvoid = ((g.type==='barn'&&type==='office')||(g.type==='office'&&type==='barn')) ? 180 : 0;
                     const siloOfficeAvoid = ((g.type==='silo'&&type==='office')||(g.type==='office'&&type==='silo')) ? 180 : 0;
                     const radioFarmhouseAvoid = ((g.type==='radio'&&type==='farmhouse')||(g.type==='farmhouse'&&type==='radio')) ? 140 : 0;
+                    const radioOfficeAvoid = ((g.type==='radio'&&type==='office')||(g.type==='office'&&type==='radio')) ? 180 : 0;
                     const radioWaterAvoid = ((g.type==='radio'&&type==='water')||(g.type==='water'&&type==='radio')) ? 140 : 0;
                     const radioBarnAvoid = ((g.type==='radio'&&type==='barn')||(g.type==='barn'&&type==='radio')) ? 180 : 0;
                     const farmhouseWaterAvoid = ((g.type==='farmhouse'&&type==='water')||(g.type==='water'&&type==='farmhouse')) ? 140 : 0;
                     const radioSiloAvoid = ((g.type==='radio'&&type==='silo')||(g.type==='silo'&&type==='radio')) ? 140 : 0;
                     const radioHorseAvoid = ((g.type==='radio'&&type==='horse')||(g.type==='horse'&&type==='radio')) ? 140 : 0;
-                    const barnWaterAvoid = ((g.type==='barn'&&type==='water')||(g.type==='water'&&type==='barn')) ? 140 : 0;
-                    const waterSiloAvoid = ((g.type==='water'&&type==='silo')||(g.type==='silo'&&type==='water')) ? 140 : 0;
+                    const barnWaterAvoid = ((g.type==='barn'&&type==='water')||(g.type==='water'&&type==='barn')) ? 180 : 0;
+                    const waterSiloAvoid = ((g.type==='water'&&type==='silo')||(g.type==='silo'&&type==='water')) ? 180 : 0;
+                    const siloSiloAvoid = ((g.type==='silo'&&type==='silo')) ? 140 : 0;
                     const farmhouseSiloAvoid = ((g.type==='farmhouse'&&type==='silo')||(g.type==='silo'&&type==='farmhouse')) ? 40 : 0;
-                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
+                    const waterOfficeAvoid = ((g.type==='water'&&type==='office')||(g.type==='office'&&type==='water')) ? 180 : 0;
+                    const barnBarnAvoid = ((g.type==='barn'&&type==='barn')) ? 180 : 0;
+                  const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioOfficeAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + siloSiloAvoid + farmhouseSiloAvoid + waterOfficeAvoid + barnBarnAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
               if(!overlap) break;
@@ -324,21 +328,25 @@
               const siloAvoid = ((overlap.type==='silo'&&type!=='silo')||(type==='silo'&&overlap.type!=='silo')) ? 120 : 0;
               const waterAvoid = ((overlap.type==='water'&&type!=='water')||(type==='water'&&overlap.type!=='water')) ? 100 : 0;
               const radioAvoid = ((overlap.type==='radio'&&type!=='radio')||(type==='radio'&&overlap.type!=='radio')) ? 150 : 0;
-              const barnSiloAvoid = ((overlap.type==='barn'&&type==='silo')||(overlap.type==='silo'&&type==='barn')) ? 100 : 0;
-              const barnFarmhouseAvoid = ((overlap.type==='barn'&&type==='farmhouse')||(overlap.type==='farmhouse'&&type==='barn')) ? 60 : 0;
-              const barnOfficeAvoid = ((overlap.type==='barn'&&type==='office')||(overlap.type==='office'&&type==='barn')) ? 140 : 0;
+              const barnSiloAvoid = ((overlap.type==='barn'&&type==='silo')||(overlap.type==='silo'&&type==='barn')) ? 140 : 0;
+              const barnFarmhouseAvoid = ((overlap.type==='barn'&&type==='farmhouse')||(overlap.type==='farmhouse'&&type==='barn')) ? 100 : 0;
+              const barnOfficeAvoid = ((overlap.type==='barn'&&type==='office')||(overlap.type==='office'&&type==='barn')) ? 180 : 0;
               const siloOfficeAvoid = ((overlap.type==='silo'&&type==='office')||(overlap.type==='office'&&type==='silo')) ? 180 : 0;
               const radioFarmhouseAvoid = ((overlap.type==='radio'&&type==='farmhouse')||(overlap.type==='farmhouse'&&type==='radio')) ? 140 : 0;
+              const radioOfficeAvoid = ((overlap.type==='radio'&&type==='office')||(overlap.type==='office'&&type==='radio')) ? 180 : 0;
               const radioWaterAvoid = ((overlap.type==='radio'&&type==='water')||(overlap.type==='water'&&type==='radio')) ? 140 : 0;
               const radioBarnAvoid = ((overlap.type==='radio'&&type==='barn')||(overlap.type==='barn'&&type==='radio')) ? 180 : 0;
               const farmhouseWaterAvoid = ((overlap.type==='farmhouse'&&type==='water')||(overlap.type==='water'&&type==='farmhouse')) ? 140 : 0;
               const radioSiloAvoid = ((overlap.type==='radio'&&type==='silo')||(overlap.type==='silo'&&type==='radio')) ? 140 : 0;
               const radioHorseAvoid = ((overlap.type==='radio'&&type==='horse')||(overlap.type==='horse'&&type==='radio')) ? 140 : 0;
-              const barnWaterAvoid = ((overlap.type==='barn'&&type==='water')||(overlap.type==='water'&&type==='barn')) ? 140 : 0;
-              const waterSiloAvoid = ((overlap.type==='water'&&type==='silo')||(overlap.type==='silo'&&type==='water')) ? 140 : 0;
+              const barnWaterAvoid = ((overlap.type==='barn'&&type==='water')||(overlap.type==='water'&&type==='barn')) ? 180 : 0;
+              const waterSiloAvoid = ((overlap.type==='water'&&type==='silo')||(overlap.type==='silo'&&type==='water')) ? 180 : 0;
+              const siloSiloAvoid = ((overlap.type==='silo'&&type==='silo')) ? 140 : 0;
               const farmhouseSiloAvoid = ((overlap.type==='farmhouse'&&type==='silo')||(overlap.type==='silo'&&type==='farmhouse')) ? 40 : 0;
-              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
-              newX = overlap.x + overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + 10;
+              const waterOfficeAvoid = ((overlap.type==='water'&&type==='office')||(overlap.type==='office'&&type==='water')) ? 180 : 0;
+              const barnBarnAvoid = ((overlap.type==='barn'&&type==='barn')) ? 180 : 0;
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioOfficeAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + siloSiloAvoid + farmhouseSiloAvoid + waterOfficeAvoid + barnBarnAvoid);
+              newX = (overlap.x + overlap.width/2) + minGap + 2 - baseW/2;
               safety++;
               if(safety>50){
                 // fallback: place further to the right
@@ -549,51 +557,10 @@
           // specular highlight
           ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wi.x+winW*0.12, wi.y+winH*0.08, winW*0.5, winH*0.18);
         });
-        // roof with shingles - black
+        // roof - black
         ctx.fillStyle=shadeColorRGB([20,20,20],t*0.25);
         ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-18); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
         ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=1; ctx.stroke();
-        
-        // black shingles
-        ctx.fillStyle = 'rgba(30,30,30,0.6)';
-        const shingleHeight = 3;
-        const shingleWidth = 8;
-        const roofPeakX = g.x + g.width / 2;
-        const roofPeakY = g.y - 18;
-        
-        // left side shingles
-        for(let row = 0; row < 6; row++){
-          const y = roofPeakY + row * shingleHeight;
-          const leftX = roofPeakX - (row + 1) * (g.width / 2 / 6);
-          const rightX = roofPeakX;
-          const rowWidth = rightX - leftX;
-          const numShingles = Math.ceil(rowWidth / shingleWidth);
-          const offsetX = (row % 2) * (shingleWidth / 2);
-          
-          for(let i = 0; i < numShingles; i++){
-            const sx = leftX + i * shingleWidth + offsetX;
-            if(sx < roofPeakX){
-              ctx.fillRect(sx, y, shingleWidth - 0.5, shingleHeight - 0.5);
-            }
-          }
-        }
-        
-        // right side shingles
-        for(let row = 0; row < 6; row++){
-          const y = roofPeakY + row * shingleHeight;
-          const leftX = roofPeakX;
-          const rightX = roofPeakX + (row + 1) * (g.width / 2 / 6);
-          const rowWidth = rightX - leftX;
-          const numShingles = Math.ceil(rowWidth / shingleWidth);
-          const offsetX = (row % 2) * (shingleWidth / 2);
-          
-          for(let i = 0; i < numShingles; i++){
-            const sx = leftX + i * shingleWidth + offsetX;
-            if(sx + shingleWidth > leftX && sx < rightX){
-              ctx.fillRect(sx, y, shingleWidth - 0.5, shingleHeight - 0.5);
-            }
-          }
-        }
         
         ctx.restore();
         return;
@@ -1191,13 +1158,10 @@
 
     function drawRings(){
       ctx.save();
-      ctx.font='12px system-ui, sans-serif';
-      ctx.fillStyle='#222';
       for(const r of rings){
         if(!r.collected){ r.glow=(r.glow+0.06)%1; const a=0.5+0.5*Math.sin(r.glow*Math.PI*2); ctx.strokeStyle=`rgba(255,255,0,${0.6+0.4*a})`; ctx.lineWidth=4+2*a; }
         else { ctx.strokeStyle='rgba(255,255,0,0.25)'; ctx.lineWidth=2; }
         ctx.beginPath(); ctx.arc(r.x,r.y,r.radius,0,Math.PI*2); ctx.stroke();
-        if(!r.collected){ ctx.fillText(r.name, r.x-18, r.y-r.radius-6); }
       }
       ctx.restore();
     }
