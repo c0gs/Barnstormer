@@ -32,7 +32,7 @@
     // === State ===
     const w=()=>canvas.clientWidth, h=()=>canvas.clientHeight;
     const CAMERA_X = 150; // fixed on-screen x for the plane (camera follows world)
-    const plane={x:CAMERA_X,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
+    const plane={x:CAMERA_X,y:h()/2,prevY:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
       // looping state: some legacy fields kept for compatibility
       loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.02,
       // crash state
@@ -302,7 +302,9 @@
                     const waterAvoid = ((g.type==='water'&&type!=='water')||(type==='water'&&g.type!=='water')) ? 100 : 0;
                     const radioAvoid = ((g.type==='radio'&&type!=='radio')||(type==='radio'&&g.type!=='radio')) ? 150 : 0;
                     const barnSiloAvoid = ((g.type==='barn'&&type==='silo')||(g.type==='silo'&&type==='barn')) ? 50 : 0;
-                    const siloOfficeAvoid = ((g.type==='silo'&&type==='office')||(g.type==='office'&&type==='silo')) ? 140 : 0;
+                    const barnFarmhouseAvoid = ((g.type==='barn'&&type==='farmhouse')||(g.type==='farmhouse'&&type==='barn')) ? 60 : 0;
+                    const barnOfficeAvoid = ((g.type==='barn'&&type==='office')||(g.type==='office'&&type==='barn')) ? 140 : 0;
+                    const siloOfficeAvoid = ((g.type==='silo'&&type==='office')||(g.type==='office'&&type==='silo')) ? 180 : 0;
                     const radioFarmhouseAvoid = ((g.type==='radio'&&type==='farmhouse')||(g.type==='farmhouse'&&type==='radio')) ? 140 : 0;
                     const radioWaterAvoid = ((g.type==='radio'&&type==='water')||(g.type==='water'&&type==='radio')) ? 140 : 0;
                     const radioBarnAvoid = ((g.type==='radio'&&type==='barn')||(g.type==='barn'&&type==='radio')) ? 140 : 0;
@@ -312,7 +314,7 @@
                     const barnWaterAvoid = ((g.type==='barn'&&type==='water')||(g.type==='water'&&type==='barn')) ? 140 : 0;
                     const waterSiloAvoid = ((g.type==='water'&&type==='silo')||(g.type==='silo'&&type==='water')) ? 140 : 0;
                     const farmhouseSiloAvoid = ((g.type==='farmhouse'&&type==='silo')||(g.type==='silo'&&type==='farmhouse')) ? 40 : 0;
-                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
+                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
               if(!overlap) break;
@@ -323,7 +325,9 @@
               const waterAvoid = ((overlap.type==='water'&&type!=='water')||(type==='water'&&overlap.type!=='water')) ? 100 : 0;
               const radioAvoid = ((overlap.type==='radio'&&type!=='radio')||(type==='radio'&&overlap.type!=='radio')) ? 150 : 0;
               const barnSiloAvoid = ((overlap.type==='barn'&&type==='silo')||(overlap.type==='silo'&&type==='barn')) ? 50 : 0;
-              const siloOfficeAvoid = ((overlap.type==='silo'&&type==='office')||(overlap.type==='office'&&type==='silo')) ? 140 : 0;
+              const barnFarmhouseAvoid = ((overlap.type==='barn'&&type==='farmhouse')||(overlap.type==='farmhouse'&&type==='barn')) ? 60 : 0;
+              const barnOfficeAvoid = ((overlap.type==='barn'&&type==='office')||(overlap.type==='office'&&type==='barn')) ? 140 : 0;
+              const siloOfficeAvoid = ((overlap.type==='silo'&&type==='office')||(overlap.type==='office'&&type==='silo')) ? 180 : 0;
               const radioFarmhouseAvoid = ((overlap.type==='radio'&&type==='farmhouse')||(overlap.type==='farmhouse'&&type==='radio')) ? 140 : 0;
               const radioWaterAvoid = ((overlap.type==='radio'&&type==='water')||(overlap.type==='water'&&type==='radio')) ? 140 : 0;
               const radioBarnAvoid = ((overlap.type==='radio'&&type==='barn')||(overlap.type==='barn'&&type==='radio')) ? 140 : 0;
@@ -333,7 +337,7 @@
               const barnWaterAvoid = ((overlap.type==='barn'&&type==='water')||(overlap.type==='water'&&type==='barn')) ? 140 : 0;
               const waterSiloAvoid = ((overlap.type==='water'&&type==='silo')||(overlap.type==='silo'&&type==='water')) ? 140 : 0;
               const farmhouseSiloAvoid = ((overlap.type==='farmhouse'&&type==='silo')||(overlap.type==='silo'&&type==='farmhouse')) ? 40 : 0;
-              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
               newX = overlap.x + overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + 10;
               safety++;
               if(safety>50){
@@ -1304,6 +1308,10 @@
         // smooth interpolation back to center when released
         plane.angle += (targetAngle - plane.angle) * 0.08;
 
+        // apply vertical movement based on angle
+        const verticalSpeed = Math.sin(plane.angle) * speed * 2.5;
+        plane.y += verticalSpeed;
+
         // clamp vertically so the plane stays on screen
         plane.y = Math.max(10, Math.min(h()-10, plane.y));
       }
@@ -1319,15 +1327,22 @@
       // world scroll should match plane's intended horizontal movement: increase scroll when plane points right
       const worldShift = speed + vx;
 
-      // audio pitch modulation: alter engine oscillator frequency by speed and plane angle
+      // audio pitch modulation: alter engine oscillator frequency by speed, plane angle, and vertical velocity
       if(audioInited && engineOsc){
         try{
           const current = engineOsc.frequency.value || engineBaseFreq;
-          const target = engineBaseFreq + speed * speedFreqFactor + plane.angle * angleFreqFactor;
+          // calculate vertical velocity (positive = diving down, negative = climbing up)
+          const vy = plane.y - plane.prevY;
+          // diving (positive vy) lowers pitch, climbing (negative vy) raises pitch
+          const vyFreqFactor = -25; // Hz per pixel of vertical velocity (negative sign inverts)
+          const target = engineBaseFreq + speed * speedFreqFactor + plane.angle * angleFreqFactor + vy * vyFreqFactor;
           const clamped = Math.max(minEngineFreq, Math.min(maxEngineFreq, target));
           engineOsc.frequency.value = current + (clamped - current) * freqSmoothing;
         }catch(e){/* ignore if audio not ready */}
       }
+      
+      // update previous Y for next frame's velocity calculation
+      plane.prevY = plane.y;
 
       // progress & spawns
       distCloud+=speed; distGround+=speed; distRing+=speed;
@@ -1474,7 +1489,7 @@
       groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0; bullets.length=0;
       // reset plane
       plane.alive = true; plane.crashed = false; plane.angle = 0; plane.propAngle = 0; plane.loopActive = false; plane.loopProgress = 0;
-      plane.y = h()/2;
+      plane.y = h()/2; plane.prevY = h()/2;
       paused = false;
       // reseed a simple scene
       seedDemo();
