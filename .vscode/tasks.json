@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Reduce farmhouse max height",
+			"type": "shell",
+			"command": "powershell -NoProfile -Command \n(Get-Content 'index.html') -join \"`n\" -replace 'baseH = 60 \\+ Math\\.random\\(\\)\\*60; // 60\\.\\.120','baseH = 60 + Math.random()*40; // 60..100' | Set-Content 'index.html'",
+			"group": "build"
+		}
+	]
+}
