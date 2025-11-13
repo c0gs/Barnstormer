@@ -312,7 +312,7 @@
                     const barnWaterAvoid = ((g.type==='barn'&&type==='water')||(g.type==='water'&&type==='barn')) ? 140 : 0;
                     const waterSiloAvoid = ((g.type==='water'&&type==='silo')||(g.type==='silo'&&type==='water')) ? 140 : 0;
                     const farmhouseSiloAvoid = ((g.type==='farmhouse'&&type==='silo')||(g.type==='silo'&&type==='farmhouse')) ? 40 : 0;
-                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
+                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
               if(!overlap) break;
