@@ -585,31 +585,6 @@
         ctx.lineTo(g.x + g.width + overhang, g.y);
         ctx.closePath();
         ctx.fill();
-
-        // vertical siding lines on roof (clipped to roof shape)
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(roofLeft, roofBaseY);
-        ctx.lineTo(roofLeft + seg * 0.3, roofBaseY - seg * 0.4);
-        ctx.lineTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
-        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
-        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
-        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
-        ctx.lineTo(roofRight - seg * 0.3, roofBaseY - seg * 0.4);
-        ctx.lineTo(roofRight, roofBaseY);
-        ctx.closePath();
-        ctx.clip();
-        ctx.strokeStyle='rgba(0,0,0,0.18)';
-        ctx.lineWidth=1;
-        const panelSpacing = Math.max(6, Math.round(g.width/16));
-        for(let x=roofLeft + panelSpacing/2; x<roofRight; x+=panelSpacing){
-          ctx.beginPath();
-          ctx.moveTo(x, roofBaseY);
-          ctx.lineTo(x, roofPeakY);
-          ctx.stroke();
-        }
-        ctx.restore();
-        ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=1; ctx.stroke();
         
         ctx.restore();
         return;
@@ -872,11 +847,11 @@
         ctx.stroke();
         ctx.restore();
         
-        // Roof - half octagon shape
+        // Roof - half octagon shape (taller)
         ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
         ctx.beginPath();
         const roofBaseY = g.y;
-        const roofPeakY = g.y - Math.max(42, Math.round(g.height * 0.28));
+        const roofPeakY = g.y - Math.max(52, Math.round(g.height * 0.35));
         const roofLeft = g.x;
         const roofRight = g.x + g.width;
         const roofCenterX = g.x + g.width / 2;
@@ -901,6 +876,39 @@
         ctx.closePath();
         ctx.fill();
         ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.stroke();
+        
+        // Vertical siding on roof (clipped to roof polygon)
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(roofLeft, roofBaseY);
+        ctx.lineTo(roofLeft + seg * 0.3, roofBaseY - seg * 0.4);
+        ctx.lineTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.lineTo(roofRight - seg * 0.3, roofBaseY - seg * 0.4);
+        ctx.lineTo(roofRight, roofBaseY);
+        ctx.closePath();
+        ctx.clip();
+        ctx.strokeStyle='rgba(0,0,0,0.25)';
+        ctx.lineWidth=1.5;
+        const panelSpacing = Math.max(8, Math.round(g.width/14));
+        for(let x=roofLeft + panelSpacing/2; x<roofRight; x+=panelSpacing){
+          ctx.beginPath();
+          ctx.moveTo(x, roofBaseY);
+          ctx.lineTo(x, roofPeakY);
+          ctx.stroke();
+        }
+        ctx.restore();
+        
+        // Thick black outline across the top of the roof
+        ctx.strokeStyle='rgba(0,0,0,0.9)'; ctx.lineWidth=3.5;
+        ctx.beginPath();
+        ctx.moveTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.stroke();
         
         // Silver border along the top edge
         ctx.strokeStyle='rgba(192,192,192,0.9)'; ctx.lineWidth=2.5;
