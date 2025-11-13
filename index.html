@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <div id="hud">W/S or A/D: up/down • Shift: speed boost • Space: fire
+  <div id="hud">W/S: Climb/Dive • A/D: loop • Shift: speed boost • Space: fire
     <button id="mute" style="margin-left:8px;border:0;background:#fff;border-radius:6px;padding:4px 8px;cursor:pointer">🔊</button>
   </div>
   <canvas id="game"></canvas>
@@ -60,7 +60,11 @@
       const r=Math.round(lerp(c1[0],c2[0],t));
       const g=Math.round(lerp(c1[1],c2[1],t));
       const b=Math.round(lerp(c1[2],c2[2],t));
-      return `rgb(${r},${g},${b})`;
+      return [r,g,b];
+    };
+    const lerpColorStr=(c1,c2,t)=>{
+      const rgb=lerpColor(c1,c2,t);
+      return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
     };
     const dayToDuskT=()=>clamp01((Math.sin(sunlightAngle- Math.PI/2)+1)/2); // 0 midday -> 1 dusk
     const sunPhase=()=>clamp01((Math.sin(sunlightAngle)+1)/2); // 0 night -> 1 day
@@ -77,8 +81,8 @@
     function drawSky(){
       const t=dayToDuskT();
       const sun = sunPhase();
-      const top = lerpColor([135,206,235],[20,20,48], 1 - sun); // blue day -> dark night
-      const bot = lerpColor([176,224,255],[10,10,30], 1 - sun);
+      const top = lerpColorStr([135,206,235],[20,20,48], 1 - sun); // blue day -> dark night
+      const bot = lerpColorStr([176,224,255],[10,10,30], 1 - sun);
       const g=ctx.createLinearGradient(0,0,0,h());
       g.addColorStop(0,top); g.addColorStop(1,bot);
       ctx.fillStyle=g; ctx.fillRect(0,0,w(),h());
@@ -124,7 +128,7 @@
         ctx.restore();
       }
 
-      const groundColor=lerpColor([34,139,34],[12,40,12], 1 - sun);
+      const groundColor=lerpColorStr([34,139,34],[12,40,12], 1 - sun);
       ctx.fillStyle=groundColor; ctx.fillRect(0,h()-60,w(),60);
     }
 
@@ -133,7 +137,10 @@
       const num=Math.floor(Math.random()*3)+1;
       for(let i=0;i<num;i++){
         const size=24+Math.random()*56;
-        clouds.push({x:w()+80+Math.random()*160,y:20+Math.random()*(h()*0.5-40),size});
+        const variation = Math.random(); // seed for shape randomization
+        const lobes = 3 + Math.floor(Math.random()*4); // 3-6 cloud puffs
+        const curlStrength = 0.3 + Math.random()*0.4; // how curvy the cloud is
+        clouds.push({x:w()+80+Math.random()*160,y:20+Math.random()*(h()*0.5-40),size,variation,lobes,curlStrength});
       }
     }
 
@@ -154,7 +161,7 @@
         } else if(type === 'radio'){
           // radio towers: tallest
           baseW = 10 + Math.random()*10; // 10..20 (thinner)
-          baseH = 220 + Math.random()*160; // 220..380
+          baseH = 180 + Math.random()*100; // 180..280
         } else if(type === 'horse'){
           // horses: smallest, low-profile objects
           baseW = 28 + Math.random()*24; // 28..52
@@ -269,8 +276,37 @@
     // === Drawing helpers ===
     function drawCloud(c){
       const t=dayToDuskT();
-      ctx.fillStyle=lerpColor([255,255,255],[255,230,210],t);
-      ctx.beginPath(); ctx.ellipse(c.x,c.y,c.size,c.size*0.6,0,0,Math.PI*2); ctx.fill();
+      const baseColor = lerpColorStr([255,255,255],[255,230,210],t);
+      const shadowColor = lerpColorStr([220,225,235],[240,210,190],t);
+      
+      // multi-puff cloud with varied sizes based on variation seed
+      const variation = c.variation || 0.5;
+      const puffs = [
+        {x: c.x, y: c.y, rx: c.size, ry: c.size*0.6},
+        {x: c.x - c.size*0.5, y: c.y + c.size*0.1, rx: c.size*0.6, ry: c.size*0.5},
+        {x: c.x + c.size*0.5, y: c.y + c.size*0.1, rx: c.size*0.65, ry: c.size*0.55},
+        {x: c.x - c.size*0.2, y: c.y - c.size*0.3, rx: c.size*0.4, ry: c.size*0.35},
+        {x: c.x + c.size*0.25, y: c.y - c.size*0.25, rx: c.size*(0.4 + variation*0.2), ry: c.size*0.35}
+      ];
+      
+      // draw main puffs
+      ctx.fillStyle = baseColor;
+      for(const p of puffs){
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, p.rx, p.ry, 0, 0, Math.PI*2);
+        ctx.fill();
+      }
+      
+      // add shadow detail on lower puffs for depth
+      ctx.fillStyle = shadowColor;
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.ellipse(c.x - c.size*0.5, c.y + c.size*0.2, c.size*0.5, c.size*0.35, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(c.x + c.size*0.5, c.y + c.size*0.2, c.size*0.55, c.size*0.4, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
     function shadeColorRGB(rgb, amt){
@@ -312,13 +348,7 @@
           grad.addColorStop(1, t < 0.5 ? '#87ceeb' : `rgba(255,210,80,${0.6 + nightGlow * 0.2})`);
           ctx.fillStyle=grad; ctx.fillRect(wi.x,wi.y,winW,winH);
           
-          // glow effect at night
-          if(nightGlow > 0){
-            ctx.shadowColor = `rgba(255,200,100,${nightGlow * 0.4})`;
-            ctx.shadowBlur = 8 * nightGlow;
-          }
           ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wi.x,wi.y,winW,winH);
-          ctx.shadowColor = 'transparent';
           
           // specular highlight
           ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wi.x+winW*0.12, wi.y+winH*0.08, winW*0.5, winH*0.18);
@@ -357,19 +387,12 @@
             const wg = ctx.createLinearGradient(wx, wy, wx, wy+winH);
             wg.addColorStop(0, t < 0.5 ? 'rgba(255,255,255,0.9)' : `rgba(255,255,200,${winAlpha})`);
             wg.addColorStop(0.18, `rgba(${winColor[0]},${winColor[1]},${winColor[2]},${winAlpha})`);
-            wg.addColorStop(1, lerpColor([20,25,30],[220,180,100], t));
+            const bottomColor = lerpColor([20,25,30],[220,180,100], t);
+            wg.addColorStop(1, `rgb(${bottomColor[0]},${bottomColor[1]},${bottomColor[2]})`);
             ctx.fillStyle = wg;
             ctx.fillRect(wx, wy, winW, winH);
             
-            // glow effect at night
-            if(nightGlow > 0){
-              ctx.shadowColor = `rgba(255,200,100,${nightGlow * 0.3})`;
-              ctx.shadowBlur = 6 * nightGlow;
-              ctx.strokeStyle = `rgba(0,0,0,0.5)`; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
-              ctx.shadowColor = 'transparent';
-            } else {
-              ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
-            }
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
             
             // subtle specular highlight (top-left)
             ctx.fillStyle = 'rgba(255,255,255,0.16)';
@@ -394,14 +417,14 @@
         ctx.fillRect(trunkX, trunkY, tw, trunkH);
         ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(trunkX, trunkY, tw, trunkH);
         // canopy: multiple clumps using per-tree params
-        const leafBase = lerpColor([46,139,87],[20,70,40],t);
+        const leafBase = lerpColorStr([46,139,87],[20,70,40],t);
         for(let i=0;i<(g.canopyCount||3);i++){
           const seed = (g.variantSeed||0.5) * 10 + i*1.37;
           const cx = Math.round(g.x + g.width*0.5 + (i - ((g.canopyCount||3)-1)/2) * (g.canopySpread || (g.width*0.6)) / (g.canopyCount||3));
           const cy = Math.round(g.y + (g.canopyYOffset || g.height*0.25) - i*6);
           const r = Math.round((g.canopyR || Math.max(12, g.width*0.6)) * (0.8 + 0.35 * Math.sin(seed)));
           const lcT = clamp01(t + (g.leafHueShift || 0));
-          const leafColor = lerpColor([46,139,87],[20,70,40], lcT);
+          const leafColor = lerpColorStr([46,139,87],[20,70,40], lcT);
           ctx.fillStyle = leafColor;
           ctx.beginPath(); ctx.ellipse(cx, cy, r, Math.round(r*0.8), 0, 0, Math.PI*2); ctx.fill();
         }
@@ -449,47 +472,31 @@
         ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
-        // sliding double-doors: two panels that slide sideways based on g.doorProgress
+        // single sliding door: one panel slides to the right based on g.doorProgress
         const doorTotalW = Math.max(50, Math.floor(g.width * 0.5));
         const doorY = g.y + g.height * 0.5;
         const doorH = Math.max(40, Math.floor(g.height * 0.5));
-        const leftPanelW = Math.ceil(doorTotalW / 2);
-        const rightPanelW = doorTotalW - leftPanelW;
-        const closedLeftX = Math.round(g.x + (g.width - doorTotalW) / 2);
-        const closedRightX = closedLeftX + leftPanelW;
-        const openOffsetLeft = Math.round((leftPanelW + 8) * (g.doorProgress || 0));
-        const openOffsetRight = Math.round((rightPanelW + 8) * (g.doorProgress || 0));
-        const leftX = closedLeftX - openOffsetLeft;
-        const rightX = closedRightX + openOffsetRight;
-        // opening: clear the door aperture (the gap between the panels) so the sky shows through
-        const apertureLeft = leftX + leftPanelW;
-        const apertureRight = rightX;
-        const apertureW = apertureRight - apertureLeft;
+        const closedDoorX = Math.round(g.x + (g.width - doorTotalW) / 2);
+        const openOffset = Math.round((doorTotalW + 8) * (g.doorProgress || 0));
+        const doorX = closedDoorX + openOffset;
+        // opening: clear the aperture (the space left behind as door slides right) so the sky shows through
+        const apertureW = openOffset;
         if(apertureW > 0){
-          ctx.clearRect(apertureLeft, doorY - 2, apertureW, doorH + 4); // slight padding for cleaner look
+          ctx.clearRect(closedDoorX, doorY - 2, apertureW, doorH + 4); // slight padding for cleaner look
         }
 
-        // draw left panel
+        // draw single door panel
         ctx.save();
         ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
-        ctx.fillRect(leftX, doorY, leftPanelW, doorH);
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(leftX, doorY, leftPanelW, doorH);
-        // X brace on left panel
+        ctx.fillRect(doorX, doorY, doorTotalW, doorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(doorX, doorY, doorTotalW, doorH);
+        // X brace on door panel
         ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(leftX + 6, doorY + 6); ctx.lineTo(leftX + leftPanelW - 6, doorY + doorH - 6); ctx.moveTo(leftX + leftPanelW - 6, doorY + 6); ctx.lineTo(leftX + 6, doorY + doorH - 6); ctx.stroke();
-        // draw right panel
-        ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
-        ctx.fillRect(rightX, doorY, rightPanelW, doorH);
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(rightX, doorY, rightPanelW, doorH);
-        // X brace on right panel
-        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(rightX + 6, doorY + 6); ctx.lineTo(rightX + rightPanelW - 6, doorY + doorH - 6); ctx.moveTo(rightX + rightPanelW - 6, doorY + 6); ctx.lineTo(rightX + 6, doorY + doorH - 6); ctx.stroke();
-        // plank seams for each panel
+        ctx.beginPath(); ctx.moveTo(doorX + 6, doorY + 6); ctx.lineTo(doorX + doorTotalW - 6, doorY + doorH - 6); ctx.moveTo(doorX + doorTotalW - 6, doorY + 6); ctx.lineTo(doorX + 6, doorY + doorH - 6); ctx.stroke();
+        // plank seams
         ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        const seamsLeft = Math.max(0, Math.floor((leftPanelW - 6) / 20));
-        for(let si=1; si<=seamsLeft; si++){ const px = leftX + Math.round((leftPanelW/(seamsLeft+1))*si); ctx.beginPath(); ctx.moveTo(px, doorY + 6); ctx.lineTo(px, doorY + doorH - 6); ctx.stroke(); }
-        const seamsRight = Math.max(0, Math.floor((rightPanelW - 6) / 20));
-        for(let si=1; si<=seamsRight; si++){ const px = rightX + Math.round((rightPanelW/(seamsRight+1))*si); ctx.beginPath(); ctx.moveTo(px, doorY + 6); ctx.lineTo(px, doorY + doorH - 6); ctx.stroke(); }
+        const seams = Math.max(0, Math.floor((doorTotalW - 6) / 20));
+        for(let si=1; si<=seams; si++){ const px = doorX + Math.round((doorTotalW/(seams+1))*si); ctx.beginPath(); ctx.moveTo(px, doorY + 6); ctx.lineTo(px, doorY + doorH - 6); ctx.stroke(); }
         ctx.restore();
         ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
         ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-20); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
@@ -555,9 +562,9 @@
         const domeRadiusY = 14; const domeRadiusX = tankW*0.52;
         // glossy gradient for tank
         const tankGrad = ctx.createLinearGradient(tankX, tankY, tankX, tankY + tankH + domeRadiusY);
-        tankGrad.addColorStop(0, lerpColor([230,240,250],[200,220,230], t*0.2));
-        tankGrad.addColorStop(0.4, lerpColor([200,220,230],[170,190,200], t*0.08));
-        tankGrad.addColorStop(1, lerpColor([160,180,200],[140,160,180], t*0.02));
+        tankGrad.addColorStop(0, lerpColorStr([230,240,250],[200,220,230], t*0.2));
+        tankGrad.addColorStop(0.4, lerpColorStr([200,220,230],[170,190,200], t*0.08));
+        tankGrad.addColorStop(1, lerpColorStr([160,180,200],[140,160,180], t*0.02));
         ctx.fillStyle = tankGrad;
         // dome
         ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY, domeRadiusX, domeRadiusY, 0, Math.PI, 0, true); ctx.fill();
@@ -605,20 +612,22 @@
 
     // === Plane ===
     function drawPlane(){
-      ctx.save(); ctx.translate(plane.x,plane.y);
-      // apply tilt/rotation from controls (plane.angle)
-      ctx.rotate(plane.angle);
-      // fuselage
-      ctx.fillStyle='#c33'; ctx.beginPath(); ctx.ellipse(0,0,35,10,0,0,Math.PI*2); ctx.fill();
-      // wings
-      ctx.fillStyle='#b00'; ctx.fillRect(-30,-20,60,5); ctx.fillRect(-30,15,60,5);
-      // tail
-      ctx.fillStyle='#a00'; ctx.fillRect(-40,-5,10,10); ctx.beginPath(); ctx.moveTo(-45,0); ctx.lineTo(-55,-10); ctx.lineTo(-55,10); ctx.closePath(); ctx.fill();
-      // gear
-      ctx.strokeStyle='#222'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-15,15); ctx.lineTo(-20,30); ctx.moveTo(15,15); ctx.lineTo(20,30); ctx.stroke();
-      ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(-20,32,4,0,Math.PI*2); ctx.arc(20,32,4,0,Math.PI*2); ctx.fill();
-      // propeller
-      plane.propAngle+=0.3; ctx.save(); ctx.translate(35,0); ctx.rotate(plane.propAngle); ctx.strokeStyle='#222'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(10,0); ctx.moveTo(0,-10); ctx.lineTo(0,10); ctx.stroke(); ctx.restore();
+      if (!planeSpriteLoaded) return; // Ensure the sprite sheet is loaded
+
+      // Calculate frame size from the loaded sprite sheet (2x2 grid)
+      const spriteSize = planeSprite.width / 2; // Each frame is half the total width
+      const displaySize = spriteSize * 0.1; // Make plane 10% of original size
+      const frameIndex = Math.floor(frameCount / 10) % 4; // Cycle through 4 frames
+      const sx = (frameIndex % 2) * spriteSize; // Source x in the sprite sheet
+      const sy = Math.floor(frameIndex / 2) * spriteSize; // Source y in the sprite sheet
+
+      ctx.save();
+      ctx.translate(plane.x, plane.y);
+      ctx.rotate(plane.angle); // Apply tilt/rotation from controls
+
+      // Draw the current frame of the sprite sheet
+      ctx.drawImage(planeSprite, sx, sy, spriteSize, spriteSize, -displaySize / 2, -displaySize / 2, displaySize, displaySize);
+
       ctx.restore();
     }
 
@@ -734,15 +743,11 @@
         // ensure loop keeps plane on screen vertically
         plane.y = Math.max(10, Math.min(h()-10, plane.y));
       } else {
-        // input: W/S immediate, no momentum (A/D still act as alternate W/S when not looping)
-        if(keys['w'] || keys['a']) plane.y -= 2;
-        if(keys['s'] || keys['d']) plane.y += 2;
-
-        // rotation handling: A/D steer the plane (tilt left/right)
+        // W/S control: climb/dive (steering)
         let targetAngle = 0;
-        if (keys['a']) targetAngle = -0.35; // tilt up/left
-        else if (keys['d']) targetAngle = 0.35; // tilt down/right
-        // smooth interpolation back to center when released (slower for smoother rotation)
+        if (keys['w']) targetAngle = -0.35; // climb (tilt up)
+        else if (keys['s']) targetAngle = 0.35; // dive (tilt down)
+        // smooth interpolation back to center when released
         plane.angle += (targetAngle - plane.angle) * 0.08;
 
         // clamp vertically so the plane stays on screen
@@ -824,19 +829,13 @@
             // if it's a barn, allow passage through the door when fully open and plane is inside the door area
             if(g.type==='barn'){
               const doorTotalW = Math.max(50, Math.floor(g.width * 0.5));
-              const leftPanelW = Math.ceil(doorTotalW / 2);
-              const rightPanelW = doorTotalW - leftPanelW;
-              const closedLeftX = Math.round(g.x + (g.width - doorTotalW) / 2);
-              const closedRightX = closedLeftX + leftPanelW;
+              const closedDoorX = Math.round(g.x + (g.width - doorTotalW) / 2);
               const doorY = g.y + g.height * 0.5;
               const doorH = Math.max(40, Math.floor(g.height * 0.5));
-              const openOffsetLeft = Math.round((leftPanelW + 8) * (g.doorProgress || 0));
-              const openOffsetRight = Math.round((rightPanelW + 8) * (g.doorProgress || 0));
-              const leftX = closedLeftX - openOffsetLeft;
-              const rightX = closedRightX + openOffsetRight;
-              const apertureLeft = leftX + leftPanelW;
-              const apertureRight = rightX;
-              const apertureW = apertureRight - apertureLeft;
+              const openOffset = Math.round((doorTotalW + 8) * (g.doorProgress || 0));
+              const apertureLeft = closedDoorX;
+              const apertureRight = closedDoorX + openOffset;
+              const apertureW = openOffset;
               // allow passage if door is sufficiently open AND plane center X is within the aperture AND plane overlaps door vertically
               const doorOpen = (g.doorProgress || 0) > 0.3; // door must be at least 30% open
               const planeCenterX = plane.x;
@@ -934,6 +933,18 @@
     // === Bullets ===
     function fireBullet(){ bullets.push({x:plane.x+40, y:plane.y, speed:6}); playPop(); }
     function drawBullets(){ ctx.fillStyle='yellow'; for(const b of bullets){ ctx.beginPath(); ctx.arc(b.x,b.y,2.5,0,Math.PI*2); ctx.fill(); } }
+
+    // Load the sprite sheet for the plane
+const planeSprite = new Image();
+let planeSpriteLoaded = false;
+planeSprite.onload = () => {
+  console.log('Plane sprite sheet loaded successfully');
+  planeSpriteLoaded = true;
+};
+planeSprite.onerror = () => {
+  console.error('Failed to load the plane sprite sheet. Please check the file path.');
+};
+planeSprite.src = 'plane2x2.png';
 
     requestAnimationFrame(update);
   </script>
