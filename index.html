@@ -432,6 +432,16 @@
       // world scroll should match plane's intended horizontal movement: increase scroll when plane points right
       const worldShift = speed + vx;
 
+      // audio pitch modulation: alter engine oscillator frequency by speed and plane angle
+      if(audioInited && engineOsc){
+        try{
+          const current = engineOsc.frequency.value || engineBaseFreq;
+          const target = engineBaseFreq + speed * speedFreqFactor + plane.angle * angleFreqFactor;
+          const clamped = Math.max(minEngineFreq, Math.min(maxEngineFreq, target));
+          engineOsc.frequency.value = current + (clamped - current) * freqSmoothing;
+        }catch(e){/* ignore if audio not ready */}
+      }
+
       // progress & spawns
       distCloud+=speed; distGround+=speed; distRing+=speed;
       if(distCloud>=DIST_CLOUD){ spawnClouds(); distCloud=0; }
@@ -499,6 +509,13 @@
 
     // === Audio ===
     let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
+    // engine pitch tuning
+    const engineBaseFreq = 140;
+    const speedFreqFactor = 40; // Hz per scroll-speed unit
+    const angleFreqFactor = 60; // Hz per radian of tilt
+    const freqSmoothing = 0.08;
+    const minEngineFreq = 80;
+    const maxEngineFreq = 800;
     const muteBtn=document.getElementById('mute');
     function initAudio(){
       if(audioInited) return; audioInited=true;
