@@ -126,40 +126,53 @@
       // sun during day (soft glow) and stars/moon at night
       const nightFactor = 1 - sun;
       // sun path: move the sun along an arc across the sky using sunlightAngle
-      if(sun > 0.2){
+      // Always draw the sun, but push it below the horizon as night falls
+      {
         const sunArcX = w()*0.5 + Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
-        const sunArcY = h()*0.22 + Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
-        // radial glow
+        const baseY = h()*0.22 + Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
+        // As it gets darker, drop the sun smoothly toward/off the bottom
+        const offscreenDrop = Math.pow(1 - sun, 1.2) * (h()*0.9);
+        const sunArcY = baseY + offscreenDrop;
+        // radial glow fades with daylight
         const rg = ctx.createRadialGradient(sunArcX, sunArcY, 6, sunArcX, sunArcY, 120);
-        rg.addColorStop(0, 'rgba(255,250,200,0.95)'); rg.addColorStop(0.2, 'rgba(255,235,120,0.6)'); rg.addColorStop(0.6, 'rgba(255,200,80,0.12)'); rg.addColorStop(1, 'rgba(255,200,80,0)');
+        rg.addColorStop(0, `rgba(255,250,200,${0.95*sun})`);
+        rg.addColorStop(0.2, `rgba(255,235,120,${0.6*sun})`);
+        rg.addColorStop(0.6, `rgba(255,200,80,${0.12*sun})`);
+        rg.addColorStop(1, 'rgba(255,200,80,0)');
         ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(sunArcX, sunArcY, 120, 0, Math.PI*2); ctx.fill();
-        // core
-        ctx.fillStyle = 'rgba(255,245,180,1)'; ctx.beginPath(); ctx.arc(sunArcX, sunArcY, 22, 0, Math.PI*2); ctx.fill();
+        // core also fades with daylight
+        ctx.fillStyle = `rgba(255,245,180,${Math.min(1, Math.max(0, sun))})`;
+        ctx.beginPath(); ctx.arc(sunArcX, sunArcY, 22, 0, Math.PI*2); ctx.fill();
       }
 
       if(nightFactor > 0.2){
         ctx.save();
         ctx.globalAlpha = Math.min(0.9, nightFactor*1.2);
         for(const s of stars){ ctx.fillStyle = `rgba(255,255,255,${s.alpha*nightFactor})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill(); }
-        // moon (opposite the sun)
-        const moonX = w()*0.5 - Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
-        const moonY = h()*0.22 - Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
+        ctx.restore();
+      }
+
+      // Always draw the moon; push it off-screen upward as day rises
+      {
+        const moonBaseX = w()*0.5 - Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
+        const moonBaseY = h()*0.22 - Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
         const moonRadius = 50.4; // 80% larger than original 28
-        // Draw moon fully opaque (not affected by outer globalAlpha)
+        const rise = Math.pow(sun, 1.2) * (h()*0.9);
+        const moonY = moonBaseY - rise;
+        const moonX = moonBaseX;
+        const moonAlpha = Math.min(0.95, Math.max(0, nightFactor*1.2));
         ctx.save();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = 'rgb(180,180,185)';
+        // base disc with fade
+        ctx.fillStyle = `rgba(180,180,185,${moonAlpha})`;
         ctx.beginPath(); ctx.arc(moonX, moonY, moonRadius, 0, Math.PI*2); ctx.fill();
-        
-        // craters on moon: generate once and render randomized sizes (added 2 more vs original)
+        // craters on moon: generate once and render randomized sizes
         if(!moonCraters){ generateMoonCraters(9); }
         for(const c of (moonCraters||[])){
           const absR = c.rFrac * moonRadius;
           const cx = moonX + c.dxFrac * moonRadius;
           const cy = moonY + c.dyFrac * moonRadius;
           const isLarge = c.rFrac > 0.12;
-          const alpha = (isLarge ? 0.85 : 0.75) * nightFactor;
-          // diagonal gradient (top-left to bottom-right across crater)
+          const alpha = (isLarge ? 0.85 : 0.75) * moonAlpha;
           const grd = ctx.createLinearGradient(cx - absR, cy - absR, cx + absR, cy + absR);
           const lightRGB = isLarge ? [135,135,155] : [140,140,160];
           const midRGB   = isLarge ? [100,100,120] : [105,105,125];
@@ -170,9 +183,6 @@
           ctx.fillStyle = grd;
           ctx.beginPath(); ctx.arc(cx, cy, absR, 0, Math.PI*2); ctx.fill();
         }
-        // end opaque moon context
-        ctx.restore();
-        
         ctx.restore();
       }
 
@@ -197,7 +207,14 @@
     function pickElementType(prev){
       const weighted = ()=>{
         const r=Math.random();
-        return (r<0.09)?'farmhouse':(r<0.18)?'office':(r<0.32)?'barn':(r<0.62)?'tree':(r<0.71)?'radio':(r<0.83)?'silo':'water';
+        // Increased tree frequency
+        return (r<0.08)?'farmhouse'
+          :(r<0.18)?'office'
+          :(r<0.30)?'barn'
+          :(r<0.75)?'tree'
+          :(r<0.82)?'radio'
+          :(r<0.90)?'silo'
+          :'water';
       };
       let t = weighted();
       let tries=0;
@@ -233,7 +250,7 @@
           baseH = 14 + Math.random()*14; // 14..28
         } else if(type === 'office'){
           // office buildings: taller than silo, comparable to water tower
-          baseW = 80 + Math.random()*100; // 80..180
+          baseW = 100 + Math.random()*80; // 100..180
           baseH = 180 + Math.random()*140; // 180..320
         } else if(type === 'barn'){
           // barns: taller than farmhouse, shorter than silo
@@ -245,7 +262,7 @@
           baseH = 60 + Math.random()*40; // 60..100
         } else if(type === 'silo'){
           // silo: taller than barn, shorter than water tower
-          baseW = 55 + Math.random()*35; // 55..90
+          baseW = 70 + Math.random()*20; // 70..90 (increased min width)
           baseH = 180 + Math.random()*50; // 180..230
         } else if(type === 'water'){
           // water tower: taller than silo, shorter than radio towers
@@ -317,8 +334,9 @@
                     const siloSiloAvoid = ((g.type==='silo'&&type==='silo')) ? 140 : 0;
                     const farmhouseSiloAvoid = ((g.type==='farmhouse'&&type==='silo')||(g.type==='silo'&&type==='farmhouse')) ? 40 : 0;
                     const waterOfficeAvoid = ((g.type==='water'&&type==='office')||(g.type==='office'&&type==='water')) ? 180 : 0;
+                    const farmhouseOfficeAvoid = ((g.type==='farmhouse'&&type==='office')||(g.type==='office'&&type==='farmhouse')) ? 180 : 0;
                     const barnBarnAvoid = ((g.type==='barn'&&type==='barn')) ? 180 : 0;
-                  const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioOfficeAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + siloSiloAvoid + farmhouseSiloAvoid + waterOfficeAvoid + barnBarnAvoid);
+                  const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioOfficeAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + siloSiloAvoid + farmhouseSiloAvoid + waterOfficeAvoid + farmhouseOfficeAvoid + barnBarnAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
               if(!overlap) break;
@@ -344,8 +362,9 @@
               const siloSiloAvoid = ((overlap.type==='silo'&&type==='silo')) ? 140 : 0;
               const farmhouseSiloAvoid = ((overlap.type==='farmhouse'&&type==='silo')||(overlap.type==='silo'&&type==='farmhouse')) ? 40 : 0;
               const waterOfficeAvoid = ((overlap.type==='water'&&type==='office')||(overlap.type==='office'&&type==='water')) ? 180 : 0;
+              const farmhouseOfficeAvoid = ((overlap.type==='farmhouse'&&type==='office')||(overlap.type==='office'&&type==='farmhouse')) ? 180 : 0;
               const barnBarnAvoid = ((overlap.type==='barn'&&type==='barn')) ? 180 : 0;
-              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioOfficeAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + siloSiloAvoid + farmhouseSiloAvoid + waterOfficeAvoid + barnBarnAvoid);
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + barnFarmhouseAvoid + barnOfficeAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioOfficeAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + siloSiloAvoid + farmhouseSiloAvoid + waterOfficeAvoid + farmhouseOfficeAvoid + barnBarnAvoid);
               newX = (overlap.x + overlap.width/2) + minGap + 2 - baseW/2;
               safety++;
               if(safety>50){
@@ -488,9 +507,9 @@
       const sy=Math.sin(sunlightAngle)*shadowLen;
 
       if(g.type==='farmhouse'){
-        // body
+        // body (white walls)
         ctx.save();
-        const wall=[222,184,135];
+        const wall=[255,255,255];
         ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.fillStyle=shadeColorRGB(wall, t*0.25); ctx.fillRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
@@ -557,9 +576,39 @@
           // specular highlight
           ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wi.x+winW*0.12, wi.y+winH*0.08, winW*0.5, winH*0.18);
         });
-        // roof - black
+        // roof - black with slight overhang on both sides
+        const overhang = Math.max(6, Math.round(g.width*0.06));
         ctx.fillStyle=shadeColorRGB([20,20,20],t*0.25);
-        ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-18); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(g.x - overhang, g.y);
+        ctx.lineTo(g.x + g.width/2, g.y - 18);
+        ctx.lineTo(g.x + g.width + overhang, g.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // vertical siding lines on roof (clipped to roof shape)
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(roofLeft, roofBaseY);
+        ctx.lineTo(roofLeft + seg * 0.3, roofBaseY - seg * 0.4);
+        ctx.lineTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.lineTo(roofRight - seg * 0.3, roofBaseY - seg * 0.4);
+        ctx.lineTo(roofRight, roofBaseY);
+        ctx.closePath();
+        ctx.clip();
+        ctx.strokeStyle='rgba(0,0,0,0.18)';
+        ctx.lineWidth=1;
+        const panelSpacing = Math.max(6, Math.round(g.width/16));
+        for(let x=roofLeft + panelSpacing/2; x<roofRight; x+=panelSpacing){
+          ctx.beginPath();
+          ctx.moveTo(x, roofBaseY);
+          ctx.lineTo(x, roofPeakY);
+          ctx.stroke();
+        }
+        ctx.restore();
         ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=1; ctx.stroke();
         
         ctx.restore();
@@ -827,7 +876,7 @@
         ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
         ctx.beginPath();
         const roofBaseY = g.y;
-        const roofPeakY = g.y - 30;
+        const roofPeakY = g.y - Math.max(42, Math.round(g.height * 0.28));
         const roofLeft = g.x;
         const roofRight = g.x + g.width;
         const roofCenterX = g.x + g.width / 2;
@@ -867,14 +916,14 @@
       }
 
       if(g.type==='silo'){
-        // simple grain silo: cylindrical body with dome top and base shadow
+        // simple grain silo: cylindrical body with dome top and base shadow (light gray)
         ctx.save();
         const bodyW = g.width, bodyH = g.height;
         const bx = g.x, by = g.y;
         // shadow on ground
         ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5+sx, by+bodyH+6+sy, bodyW*0.6, bodyW*0.18, 0,0,Math.PI*2); ctx.fill();
-        // body - white
-        const baseColor = shadeColorRGB([255,255,255], t*0.08);
+        // body - light gray
+        const baseColor = shadeColorRGB([220,220,225], t*0.08);
         ctx.fillStyle = baseColor; ctx.fillRect(bx, by, bodyW, bodyH);
 
         // ladder on the side (right side) - vertical rails + rungs - black
@@ -888,8 +937,8 @@
         ctx.lineWidth = 1.5;
         for(let ry = by+14; ry < by + bodyH - 10; ry += 12){ ctx.beginPath(); ctx.moveTo(ladderX-railOffset, ry); ctx.lineTo(ladderX+railOffset, ry); ctx.stroke(); }
 
-        // half octagon roof - white
-        ctx.fillStyle = shadeColorRGB([255,255,255], t*0.04);
+        // half octagon roof - light gray
+        ctx.fillStyle = shadeColorRGB([220,220,225], t*0.04);
         ctx.beginPath();
         const roofBaseY = by;
         const roofPeakY = by - 20;
@@ -944,11 +993,12 @@
         const tankX = Math.round(wx + (ww - tankW)/2);
         const roofHeight = 20;
         const tankY = legTop - tankH - roofHeight - 2;
-        // gray gradient for tank
+        // light aqua gradient for tank
         const tankGrad = ctx.createLinearGradient(tankX, tankY, tankX, tankY + tankH + roofHeight);
-        tankGrad.addColorStop(0, lerpColorStr([180,180,180],[160,160,160], t*0.2));
-        tankGrad.addColorStop(0.4, lerpColorStr([150,150,150],[130,130,130], t*0.08));
-        tankGrad.addColorStop(1, lerpColorStr([120,120,120],[100,100,100], t*0.02));
+        // Slightly darken toward dusk using t
+        tankGrad.addColorStop(0, lerpColorStr([180,240,240],[165,225,230], t*0.25));
+        tankGrad.addColorStop(0.4, lerpColorStr([150,220,225],[135,205,215], t*0.18));
+        tankGrad.addColorStop(1, lerpColorStr([120,200,210],[100,185,195], t*0.12));
         ctx.fillStyle = tankGrad;
         
         // half octagon roof - gray
@@ -1136,8 +1186,30 @@
     }
 
     // === Plane ===
+    // Skip collisions briefly after seed/restart to avoid instant crashes
+    let framesSinceSeed = 0;
     function drawPlane(){
-      if (!planeSpriteLoaded) return; // Ensure the sprite sheet is loaded
+      if (!planeSpriteLoaded){
+        // Fallback vector plane so it's always visible if sprite isn't loaded yet
+        ctx.save();
+        ctx.translate(plane.x, plane.y);
+        ctx.rotate(plane.angle);
+        // fuselage
+        ctx.fillStyle = '#c33';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 8, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.stroke();
+        // wings
+        ctx.fillStyle = '#a11';
+        ctx.beginPath(); ctx.moveTo(-10, -3); ctx.lineTo(22, -10); ctx.lineTo(18, -4); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-10, 3); ctx.lineTo(22, 10); ctx.lineTo(18, 4); ctx.closePath(); ctx.fill();
+        // propeller
+        ctx.strokeStyle='#222'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(-24, -6); ctx.lineTo(-24, 6); ctx.stroke();
+        ctx.restore();
+        return;
+      }
 
       // Calculate frame size from the loaded sprite sheet (2x2 grid)
       const spriteSize = planeSprite.width / 2; // Each frame is half the total width
@@ -1346,9 +1418,21 @@
       // bullets
       drawBullets();
       drawPlane();
+      // debug overlay
+      try{
+        ctx.save();
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(8, 8, 180, 64);
+        ctx.fillStyle = '#fff';
+        const dbg = `paused:${paused} seedFrames:${framesSinceSeed}\nclouds:${clouds.length} ground:${groundElements.length} rings:${rings.length}\nplaneSprite:${planeSpriteLoaded ? 'loaded' : 'fallback'}`;
+        const lines = dbg.split('\n');
+        for(let i=0;i<lines.length;i++){ ctx.fillText(lines[i], 14, 24 + i*16); }
+        ctx.restore();
+      }catch(e){}
 
-      // plane collision checks (only when alive) -- run after drawing so snapshot captures crash moment
-      if(plane.alive){
+      // plane collision checks (only when alive), but skip for first ~2s to avoid early crashes
+      if(plane.alive && framesSinceSeed > 120){
         // ground collision: if plane hits the ground surface
         const groundTop = h() - 60;
         const planeHalfH = 15;
@@ -1386,6 +1470,7 @@
 
       // ring collect
       checkRingCollisions();
+      framesSinceSeed++;
     }
 
     function update(ts){
@@ -1400,12 +1485,21 @@
       if(!paused) requestAnimationFrame(update);
     }
 
-    // seed: a few clouds & a visible farmhouse
+    // seed: a few clouds & a visible farmhouse placed safely ahead of the plane
     function seedDemo(){
       groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0; bullets.length=0;
       const bw=120,bh=100;
-      groundElements.push({x:Math.max(40,Math.min(200,w()-bw-40)), y:h()-60-bh, width:bw, height:bh, type:'farmhouse'});
+      // Place the initial farmhouse well to the right of the plane's camera x to avoid immediate collisions
+      const minAhead = plane.x + 320;
+      const maxAhead = plane.x + 520;
+      const rightLimit = w() - bw - 40;
+      const target = Math.min(rightLimit, Math.max(minAhead, maxAhead));
+      const seedX = Math.max(minAhead, Math.min(rightLimit, target));
+      groundElements.push({x:seedX, y:h()-60-bh, width:bw, height:bh, type:'farmhouse'});
+      // track last placed type to prevent immediate repeats on first spawn
+      lastGroundType = 'farmhouse';
       for(let i=0;i<3;i++){ clouds.push({x:80+i*140, y:40+i*20, size:30+10*i}); }
+      framesSinceSeed = 0;
     }
     // start demo and starfield
     seedDemo();
@@ -1451,6 +1545,8 @@
     function restartGame(){
       // clear world
       groundElements.length=0; clouds.length=0; rings.length=0; dustParticles.length=0; bullets.length=0;
+      // reset last type before seeding to keep no-repeat logic accurate
+      lastGroundType = null;
       // reset plane
       plane.alive = true; plane.crashed = false; plane.angle = 0; plane.propAngle = 0; plane.loopActive = false; plane.loopProgress = 0;
       plane.y = h()/2; plane.prevY = h()/2;
@@ -1460,6 +1556,7 @@
       generateStars(120);
       // resume loop
       lastTime = null;
+      framesSinceSeed = 0;
       requestAnimationFrame(update);
     }
 
