@@ -194,8 +194,25 @@
         ctx.save();
         ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.fillStyle=shadeColorRGB([150,150,150], t*0.3); ctx.fillRect(g.x,g.y,g.width,g.height);
-        ctx.shadowColor='transparent'; ctx.fillStyle=shadeColorRGB([40,40,40], t*0.15);
-        for(let i=0;i<3;i++){ ctx.fillRect(g.x+5+i*(g.width/3),g.y+5,g.width/6,g.height-10); }
+        ctx.shadowColor='transparent';
+        // draw window grid
+        const cols = Math.max(2, Math.floor(g.width / 14));
+        const rows = Math.max(2, Math.floor(g.height / 16));
+        const winW = Math.min(12, Math.max(6, Math.floor((g.width - (cols+1)*4) / cols)));
+        const winH = Math.min(10, Math.max(6, Math.floor((g.height - (rows+1)*3) / rows)));
+        const gapX = (g.width - cols*winW) / (cols+1);
+        const gapY = (g.height - rows*winH) / (rows+1);
+        for(let ry=0; ry<rows; ry++){
+          for(let cx=0; cx<cols; cx++){
+            const wx = Math.round(g.x + gapX + cx*(winW+gapX));
+            const wy = Math.round(g.y + gapY + ry*(winH+gapY));
+            // windows get warmer color toward dusk/night (t=0..1)
+            const winColor = lerpColor([40,45,55],[255,230,120], t);
+            ctx.fillStyle = winColor;
+            ctx.fillRect(wx, wy, winW, winH);
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+          }
+        }
         ctx.restore();
         return;
       }
@@ -511,8 +528,9 @@
     let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
     // engine pitch tuning
     const engineBaseFreq = 140;
-    const speedFreqFactor = 40; // Hz per scroll-speed unit
-    const angleFreqFactor = 60; // Hz per radian of tilt
+    // make pitch range 0.25 as sensitive (smaller Hz offsets)
+    const speedFreqFactor = 40 * 0.25; // Hz per scroll-speed unit
+    const angleFreqFactor = 60 * 0.25; // Hz per radian of tilt
     const freqSmoothing = 0.08;
     const minEngineFreq = 80;
     const maxEngineFreq = 800;
