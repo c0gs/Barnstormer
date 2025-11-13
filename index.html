@@ -40,6 +40,7 @@
     };
     let paused = false;
     let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
+    let lastGroundType=null; // prevent repeating the same ground element type consecutively
     const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
     let distRing=0,distGround=0,distCloud=0;
     let frameCount=0;
@@ -53,6 +54,32 @@
     // === Lighting helpers (dynamic sky & ground) ===
     let sunlightAngle=0; // drives time-of-day and shadow direction
     let stars = [];
+    // persistent randomized moon craters (relative positions + sizes)
+    let moonCraters = null; // [{dxFrac, dyFrac, rFrac}] fractions of moon radius
+    function generateMoonCraters(count){
+      moonCraters = [];
+      const maxAttempts = 800;
+      let attempts = 0;
+      let overlapsUsed = 0; // allow up to two overlaps total
+      while(moonCraters.length < count && attempts < maxAttempts){
+        attempts++;
+        const angle = Math.random()*Math.PI*2;
+        const offsetR = 0.22 + Math.random()*0.58; // 0.22..0.80 of radius
+        const dxFrac = offsetR * Math.cos(angle);
+        const dyFrac = offsetR * Math.sin(angle);
+        const rFrac = 0.06 + Math.random()*0.16; // 6%..22% of radius
+        // measure overlaps this candidate would introduce
+        let overlapCount = 0;
+        for(const c of moonCraters){
+          const d = Math.hypot(dxFrac - c.dxFrac, dyFrac - c.dyFrac);
+          if(d < (rFrac + c.rFrac) * 1.05){ overlapCount++; }
+        }
+        if(overlapCount === 0 || overlapsUsed + overlapCount <= 2){
+          moonCraters.push({dxFrac, dyFrac, rFrac});
+          overlapsUsed += overlapCount;
+        }
+      }
+    }
     const clamp01=x=>Math.max(0,Math.min(1,x));
     const lerp=(a,b,t)=>a+(b-a)*t;
     const lerpColor=(c1,c2,t)=>{
@@ -66,6 +93,15 @@
       const rgb=lerpColor(c1,c2,t);
       return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
     };
+    // simple seeded RNG (mulberry32) for deterministic cloud shapes
+    function makeRNG(seed){
+      return function(){
+        seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
     const dayToDuskT=()=>clamp01((Math.sin(sunlightAngle- Math.PI/2)+1)/2); // 0 midday -> 1 dusk
     const sunPhase=()=>clamp01((Math.sin(sunlightAngle)+1)/2); // 0 night -> 1 day
 
@@ -90,7 +126,7 @@
       // sun during day (soft glow) and stars/moon at night
       const nightFactor = 1 - sun;
       // sun path: move the sun along an arc across the sky using sunlightAngle
-      if(sun > 0.05){
+      if(sun > 0.2){
         const sunArcX = w()*0.5 + Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
         const sunArcY = h()*0.22 + Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
         // radial glow
@@ -101,29 +137,41 @@
         ctx.fillStyle = 'rgba(255,245,180,1)'; ctx.beginPath(); ctx.arc(sunArcX, sunArcY, 22, 0, Math.PI*2); ctx.fill();
       }
 
-      if(nightFactor > 0.05){
+      if(nightFactor > 0.2){
         ctx.save();
         ctx.globalAlpha = Math.min(0.9, nightFactor*1.2);
         for(const s of stars){ ctx.fillStyle = `rgba(255,255,255,${s.alpha*nightFactor})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill(); }
         // moon (opposite the sun)
         const moonX = w()*0.5 - Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
         const moonY = h()*0.22 - Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
-        const moonRadius = 28;
-        ctx.fillStyle = `rgba(255,245,220,${0.6*nightFactor})`;
+        const moonRadius = 50.4; // 80% larger than original 28
+        // Draw moon fully opaque (not affected by outer globalAlpha)
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgb(180,180,185)';
         ctx.beginPath(); ctx.arc(moonX, moonY, moonRadius, 0, Math.PI*2); ctx.fill();
         
-        // craters on moon
-        ctx.fillStyle = `rgba(180,180,200,${0.4*nightFactor})`;
-        // larger craters
-        ctx.beginPath(); ctx.arc(moonX - 8, moonY - 10, 5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(moonX + 12, moonY - 5, 4, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(moonX + 5, moonY + 12, 3.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(moonX - 15, moonY + 8, 3, 0, Math.PI*2); ctx.fill();
-        // smaller craters for detail
-        ctx.fillStyle = `rgba(160,160,180,${0.3*nightFactor})`;
-        ctx.beginPath(); ctx.arc(moonX + 8, moonY + 2, 2, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(moonX - 10, moonY - 2, 1.8, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(moonX + 14, moonY + 10, 2.2, 0, Math.PI*2); ctx.fill();
+        // craters on moon: generate once and render randomized sizes (added 2 more vs original)
+        if(!moonCraters){ generateMoonCraters(9); }
+        for(const c of (moonCraters||[])){
+          const absR = c.rFrac * moonRadius;
+          const cx = moonX + c.dxFrac * moonRadius;
+          const cy = moonY + c.dyFrac * moonRadius;
+          const isLarge = c.rFrac > 0.12;
+          const alpha = (isLarge ? 0.85 : 0.75) * nightFactor;
+          // diagonal gradient (top-left to bottom-right across crater)
+          const grd = ctx.createLinearGradient(cx - absR, cy - absR, cx + absR, cy + absR);
+          const lightRGB = isLarge ? [135,135,155] : [140,140,160];
+          const midRGB   = isLarge ? [100,100,120] : [105,105,125];
+          const darkRGB  = isLarge ? [65,65,85] : [70,70,90];
+          grd.addColorStop(0, `rgba(${lightRGB[0]},${lightRGB[1]},${lightRGB[2]},${alpha})`);
+          grd.addColorStop(0.6, `rgba(${midRGB[0]},${midRGB[1]},${midRGB[2]},${alpha})`);
+          grd.addColorStop(1, `rgba(${darkRGB[0]},${darkRGB[1]},${darkRGB[2]},${alpha})`);
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(cx, cy, absR, 0, Math.PI*2); ctx.fill();
+        }
+        // end opaque moon context
+        ctx.restore();
         
         ctx.restore();
       }
@@ -140,17 +188,34 @@
         const variation = Math.random(); // seed for shape randomization
         const lobes = 3 + Math.floor(Math.random()*4); // 3-6 cloud puffs
         const curlStrength = 0.3 + Math.random()*0.4; // how curvy the cloud is
-        clouds.push({x:w()+80+Math.random()*160,y:20+Math.random()*(h()*0.5-40),size,variation,lobes,curlStrength});
+        const seed = (Math.random()*0xFFFFFFFF)>>>0;
+        clouds.push({x:w()+80+Math.random()*160,y:20+Math.random()*(h()*0.5-40),size,variation,lobes,curlStrength,seed});
       }
+    }
+
+    // helper: weighted random type, but avoid repeating prev type
+    function pickElementType(prev){
+      const weighted = ()=>{
+        const r=Math.random();
+        return (r<0.11)?'farmhouse':(r<0.22)?'office':(r<0.39)?'barn':(r<0.64)?'tree':(r<0.75)?'radio':(r<0.86)?'silo':'water';
+      };
+      let t = weighted();
+      let tries=0;
+      while(t===prev && tries<4){ t = weighted(); tries++; }
+      if(t===prev){
+        const all=['farmhouse','office','barn','tree','radio','silo','water'];
+        const others=all.filter(x=>x!==prev);
+        t = others[Math.floor(Math.random()*others.length)];
+      }
+      return t;
     }
 
     function spawnGroundElements(){
       // choose 1-3 elements, non-overlapping, extra spacing rules (barn-tree, horses)
       const count=Math.floor(Math.random()*3)+1;
       for(let i=0;i<count;i++){
-        // type distribution including radio, silo, water and horse
-        const r=Math.random();
-        let type=(r<0.14)?'farmhouse':(r<0.28)?'office':(r<0.42)?'barn':(r<0.56)?'tree':(r<0.70)?'radio':(r<0.80)?'silo':(r<0.88)?'water':'horse';
+        // type distribution including radio, silo, water and horse (avoid repeating last type)
+        let type = pickElementType(lastGroundType);
         // sizes — choose ranges appropriate to the element type
         // Height hierarchy: horses < trees < farmhouse < barn < silo < water tower, office < radio tower
         let baseW, baseH;
@@ -177,11 +242,11 @@
         } else if(type === 'farmhouse'){
           // farmhouse: taller than trees, shorter than barn
           baseW = 60 + Math.random()*70; // 60..130
-          baseH = 60 + Math.random()*60; // 60..120
+          baseH = 60 + Math.random()*40; // 60..100
         } else if(type === 'silo'){
           // silo: taller than barn, shorter than water tower
           baseW = 40 + Math.random()*50; // 40..90
-          baseH = 150 + Math.random()*110; // 150..260
+          baseH = 180 + Math.random()*50; // 180..230
         } else if(type === 'water'){
           // water tower: taller than silo, shorter than radio towers
           baseW = 35 + Math.random()*35; // 35..70
@@ -192,29 +257,65 @@
           baseH = 50 + Math.random()*50;
         }
             let newX = w()+100+Math.random()*200;
-            const pad=20, extraBarnTree=100, extraHorseGap=60;
+            const pad=40, extraBarnTree=100, extraHorseGap=60;
             const groundY=h()-60-baseH;
             // If a generated position overlaps existing ground elements, shift it right until it fits.
             // Use a safety cap to avoid infinite loops.
             let safety = 0;
+            // adjacency constraints for certain types (both directions)
+            const allowedNeighbors = {
+              silo: new Set(['barn','farmhouse']),
+              farmhouse: new Set(['barn','silo']),
+              barn: new Set(['farmhouse','silo','horse']),
+              radio: new Set([]), // radio towers must have no neighbors
+              water: new Set(['barn','farmhouse','tree','office','silo','radio']), // water towers can't be next to each other
+              office: new Set(['farmhouse','tree','water','radio']), // office can't be next to silo
+              horse: new Set(['barn']) // horses only near barns
+            };
+            function isAdjacencyAllowed(aType, bType){
+              if(bType==null) return true;
+              const aRule = allowedNeighbors[aType];
+              const bRule = allowedNeighbors[bType];
+              if(aRule && !aRule.has(bType)) return false;
+              if(bRule && !bRule.has(aType)) return false;
+              return true;
+            }
+            function neighborsAt(x){
+              let left=null, right=null;
+              let leftGap=Infinity, rightGap=Infinity;
+              for(const eg of groundElements){
+                const gapLeft = x - (eg.x + eg.width);
+                const gapRight = eg.x - (x + baseW);
+                if(gapLeft >= 0 && gapLeft < leftGap){ left=eg; leftGap=gapLeft; }
+                if(gapRight >= 0 && gapRight < rightGap){ right=eg; rightGap=gapRight; }
+              }
+              return {left, right, leftGap, rightGap};
+            }
+            const adjThreshold = 80; // consider elements within this edge gap as "next to"
             while(true){
               const overlap = groundElements.find(g=>{
                 const centerA = g.x + g.width/2;
                 const centerB = newX + baseW/2;
                     const barnTreeGap = ((g.type==='barn'&&type==='tree')||(g.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
                     const horseAvoid = ((g.type==='horse'&&type!=='horse')||(type==='horse'&&g.type!=='horse')) ? extraHorseGap : 0;
-                    const siloAvoid = ((g.type==='silo'&&type!=='silo')||(type==='silo'&&g.type!=='silo')) ? 80 : 0;
+                    const siloAvoid = ((g.type==='silo'&&type!=='silo')||(type==='silo'&&g.type!=='silo')) ? 120 : 0;
                     const waterAvoid = ((g.type==='water'&&type!=='water')||(type==='water'&&g.type!=='water')) ? 100 : 0;
-                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid);
+                    const radioAvoid = ((g.type==='radio'&&type!=='radio')||(type==='radio'&&g.type!=='radio')) ? 150 : 0;
+                    const barnSiloAvoid = ((g.type==='barn'&&type==='silo')||(g.type==='silo'&&type==='barn')) ? 50 : 0;
+                    const siloOfficeAvoid = ((g.type==='silo'&&type==='office')||(g.type==='office'&&type==='silo')) ? 140 : 0;
+                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
               if(!overlap) break;
               // Move newX to just beyond the overlapping element's edge
               const barnTreeGap = ((overlap.type==='barn'&&type==='tree')||(overlap.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
               const horseAvoid = ((overlap.type==='horse'&&type!=='horse')||(type==='horse'&&overlap.type!=='horse')) ? extraHorseGap : 0;
-              const siloAvoid = ((overlap.type==='silo'&&type!=='silo')||(type==='silo'&&overlap.type!=='silo')) ? 80 : 0;
+              const siloAvoid = ((overlap.type==='silo'&&type!=='silo')||(type==='silo'&&overlap.type!=='silo')) ? 120 : 0;
               const waterAvoid = ((overlap.type==='water'&&type!=='water')||(type==='water'&&overlap.type!=='water')) ? 100 : 0;
-              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid);
+              const radioAvoid = ((overlap.type==='radio'&&type!=='radio')||(type==='radio'&&overlap.type!=='radio')) ? 150 : 0;
+              const barnSiloAvoid = ((overlap.type==='barn'&&type==='silo')||(overlap.type==='silo'&&type==='barn')) ? 50 : 0;
+              const siloOfficeAvoid = ((overlap.type==='silo'&&type==='office')||(overlap.type==='office'&&type==='silo')) ? 140 : 0;
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid);
               newX = overlap.x + overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + 10;
               safety++;
               if(safety>50){
@@ -223,9 +324,39 @@
                 break;
               }
             }
+            // enforce adjacency rules for barn/farmhouse/silo
+            let adjSafety = 0;
+            while(true){
+              const {left, right, leftGap, rightGap} = neighborsAt(newX);
+              const leftType = (left && leftGap <= adjThreshold) ? left.type : null;
+              const rightType = (right && rightGap <= adjThreshold) ? right.type : null;
+              const okLeft = isAdjacencyAllowed(type, leftType);
+              const okRight = isAdjacencyAllowed(type, rightType);
+              if(okLeft && okRight) break;
+              // nudge right to find a valid neighbor configuration
+              newX += 60;
+              adjSafety++;
+              if(adjSafety>40) { newX += 200; break; }
+            }
         const phase=(type==='horse')?Math.random()*Math.PI*2:0;
         const elem = {x:newX,y:groundY,width:baseW,height:baseH,type,phase};
-        if(type==='barn'){ elem.doorProgress = 0; elem.doorTarget = 0; }
+        groundElements.push(elem);
+        lastGroundType = type;
+        if(type==='barn'){ 
+          elem.doorProgress = 0; 
+          elem.doorTarget = 0;
+          // Add 1-2 horses near the barn with fence (added after to avoid adjacency issues)
+          const numHorses = Math.random() < 0.7 ? 1 : 2;
+          for(let hi=0; hi<numHorses; hi++){
+            const horseW = 28 + Math.random()*24;
+            const horseH = 14 + Math.random()*14;
+            const horseX = newX + baseW + 80 + hi*100;
+            const horseY = h()-60-horseH;
+            const horsePhase = Math.random()*Math.PI*2;
+            const horseElem = {x:horseX, y:horseY, width:horseW, height:horseH, type:'horse', phase:horsePhase, hasFence:true};
+            groundElements.push(horseElem);
+          }
+        }
         if(type==='tree'){
           // per-tree shape params to get variation while drawing
           elem.trunkWidth = Math.max(3, Math.round(baseW * (0.12 + Math.random()*0.12))); // small trunk
@@ -236,7 +367,6 @@
           elem.leafHueShift = (Math.random()*0.2 - 0.1); // small color variation
           elem.variantSeed = Math.random();
         }
-        groundElements.push(elem);
       }
     }
 
@@ -276,37 +406,45 @@
     // === Drawing helpers ===
     function drawCloud(c){
       const t=dayToDuskT();
-      const baseColor = lerpColorStr([255,255,255],[255,230,210],t);
-      const shadowColor = lerpColorStr([200,210,220],[220,190,170],t);
-      
-      // multi-puff cloud with varied sizes based on variation seed
-      const variation = c.variation || 0.5;
-      const puffs = [
-        {x: c.x, y: c.y, rx: c.size, ry: c.size*0.6},
-        {x: c.x - c.size*0.5, y: c.y + c.size*0.1, rx: c.size*0.6, ry: c.size*0.5},
-        {x: c.x + c.size*0.5, y: c.y + c.size*0.1, rx: c.size*0.65, ry: c.size*0.55},
-        {x: c.x - c.size*0.2, y: c.y - c.size*0.3, rx: c.size*0.4, ry: c.size*0.35},
-        {x: c.x + c.size*0.25, y: c.y - c.size*0.25, rx: c.size*(0.4 + variation*0.2), ry: c.size*0.35}
-      ];
-      
-      // draw main puffs
-      ctx.fillStyle = baseColor;
-      for(const p of puffs){
+      const rng = makeRNG(c.seed||12345);
+      // base color with slight per-cloud brightness variation
+      const baseRGB = lerpColor([255,255,255],[255,230,210],t);
+      const shadeK = 0.95 + rng()*0.1; // 0.95..1.05 (less variation)
+      const bR = Math.max(0, Math.min(255, Math.round(baseRGB[0]*shadeK)));
+      const bG = Math.max(0, Math.min(255, Math.round(baseRGB[1]*shadeK)));
+      const bB = Math.max(0, Math.min(255, Math.round(baseRGB[2]*shadeK)));
+      const lightCol = `rgba(${bR},${bG},${bB},${0.96})`;
+      const midCol   = `rgba(${Math.round(bR*0.94)},${Math.round(bG*0.94)},${Math.round(bB*0.94)},${0.96})`;
+      const darkCol  = `rgba(${Math.round(bR*0.85)},${Math.round(bG*0.85)},${Math.round(bB*0.85)},${0.96})`;
+
+      // number of puffs, based on lobes plus a bit of randomness
+      const n = Math.max(4,(c.lobes||4) + Math.floor(rng()*3)); // lobes..lobes+2
+      for(let i=0;i<n;i++){
+        const xoff = (rng()*1.4 - 0.7) * c.size;
+        const yoff = (rng()*0.6 - 0.3) * c.size * (0.5 + (c.curlStrength||0.4));
+        const rx = c.size * (0.45 + rng()*0.6);
+        const ry = rx * (0.6 + rng()*0.25);
+        // diagonal gradient per puff (top-left to bottom-right)
+        const g = ctx.createLinearGradient(c.x + xoff - rx, c.y + yoff - ry, c.x + xoff + rx, c.y + yoff + ry);
+        g.addColorStop(0, lightCol);
+        g.addColorStop(0.55, midCol);
+        g.addColorStop(1, darkCol);
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y, p.rx, p.ry, 0, 0, Math.PI*2);
+        ctx.ellipse(c.x + xoff, c.y + yoff, rx, ry, 0, 0, Math.PI*2);
         ctx.fill();
       }
-      
-      // add shadow detail on lower puffs for depth
-      ctx.fillStyle = shadowColor;
-      ctx.globalAlpha = 0.5;
+
+      // randomized shadow detail along the bottom to add depth
+      const shadowRGB = lerpColor([220,225,235],[240,210,190],t);
+      const sR = Math.round(shadowRGB[0]*0.9), sG = Math.round(shadowRGB[1]*0.9), sB = Math.round(shadowRGB[2]*0.9);
+      ctx.fillStyle = `rgba(${sR},${sG},${sB},${0.25 + rng()*0.2})`;
       ctx.beginPath();
-      ctx.ellipse(c.x - c.size*0.5, c.y + c.size*0.2, c.size*0.5, c.size*0.35, 0, 0, Math.PI*2);
+      ctx.ellipse(c.x - c.size*(0.45+rng()*0.1), c.y + c.size*(0.18+rng()*0.08), c.size*(0.45+rng()*0.1), c.size*(0.32+rng()*0.08), 0, 0, Math.PI*2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(c.x + c.size*0.5, c.y + c.size*0.2, c.size*0.55, c.size*0.4, 0, 0, Math.PI*2);
+      ctx.ellipse(c.x + c.size*(0.45+rng()*0.1), c.y + c.size*(0.18+rng()*0.08), c.size*(0.5+rng()*0.1), c.size*(0.36+rng()*0.08), 0, 0, Math.PI*2);
       ctx.fill();
-      ctx.globalAlpha = 1;
     }
 
     function shadeColorRGB(rgb, amt){
@@ -369,10 +507,10 @@
         // outline building
         ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         // draw window grid
-        const cols = Math.max(2, Math.floor(g.width / 14));
-        const rows = Math.max(2, Math.floor(g.height / 16));
-        const winW = Math.min(12, Math.max(6, Math.floor((g.width - (cols+1)*4) / cols)));
-        const winH = Math.min(10, Math.max(6, Math.floor((g.height - (rows+1)*3) / rows)));
+        const cols = Math.max(4, Math.floor(g.width / 28));
+        const rows = Math.max(2, Math.floor(g.height / 32));
+        const winW = Math.min(24, Math.max(12, Math.floor((g.width - (cols+1)*6) / cols)));
+        const winH = Math.min(20, Math.max(12, Math.floor((g.height - (rows+1)*6) / rows)));
         const gapX = (g.width - cols*winW) / (cols+1);
         const gapY = (g.height - rows*winH) / (rows+1);
         for(let ry=0; ry<rows; ry++){
@@ -456,48 +594,111 @@
         const sy=Math.sin(sunlightAngle)*shadowLen;
         ctx.save();
         ctx.fillStyle='#8b0000'; ctx.fillRect(g.x,g.y,g.width,g.height);
-        // siding: vertical boards + subtle horizontal planks for texture
+        // siding: vertical boards
         ctx.save();
         const boardCount = Math.max(4, Math.floor(g.width / 18));
-        ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1.5;
         for(let i=1;i<boardCount;i++){
           const bx = Math.round(g.x + i*(g.width/boardCount));
           ctx.beginPath(); ctx.moveTo(bx, g.y+6); ctx.lineTo(bx, g.y+g.height-6); ctx.stroke();
         }
-        // horizontal plank seams
-        ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1;
-        const rowH = 14;
-        for(let y = g.y + rowH; y < g.y + g.height - 8; y += rowH){ ctx.beginPath(); ctx.moveTo(g.x+6, y); ctx.lineTo(g.x + g.width - 6, y); ctx.stroke(); }
         ctx.restore();
         ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
-        // single sliding door: one panel slides to the right based on g.doorProgress
-        const doorTotalW = Math.max(50, Math.floor(g.width * 0.5));
-        const doorY = g.y + g.height * 0.5;
-        const doorH = Math.max(40, Math.floor(g.height * 0.5));
-        const closedDoorX = Math.round(g.x + (g.width - doorTotalW) / 2);
-        const openOffset = Math.round((doorTotalW + 8) * (g.doorProgress || 0));
-        const doorX = closedDoorX + openOffset;
-        // opening: clear the aperture (the space left behind as door slides right) so the sky shows through
-        const apertureW = openOffset;
+        
+        // Ground level double doors
+        const groundDoorW = Math.max(50, Math.floor(g.width * 0.5));
+        const groundDoorH = Math.max(40, Math.floor(g.height * 0.45));
+        const groundDoorY = g.y + g.height - groundDoorH;
+        const groundDoorCenterX = g.x + g.width / 2;
+        const groundClosedLeft = groundDoorCenterX - groundDoorW / 2;
+        const groundOpenOffset = Math.round((groundDoorW / 2 + 4) * (g.doorProgress || 0));
+        
+        // Left door slides left, right door slides right
+        const leftDoorX = groundClosedLeft - groundOpenOffset;
+        const rightDoorX = groundDoorCenterX + groundOpenOffset;
+        
+        // Clear the aperture (opening between doors)
+        const apertureW = groundOpenOffset * 2;
         if(apertureW > 0){
-          ctx.clearRect(closedDoorX, doorY - 2, apertureW, doorH + 4); // slight padding for cleaner look
+          ctx.clearRect(groundDoorCenterX - apertureW/2, groundDoorY - 2, apertureW, groundDoorH + 4);
         }
-
-        // draw single door panel
+        
+        // Draw left door
         ctx.save();
         ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
-        ctx.fillRect(doorX, doorY, doorTotalW, doorH);
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(doorX, doorY, doorTotalW, doorH);
-        // X brace on door panel
+        ctx.fillRect(leftDoorX, groundDoorY, groundDoorW/2, groundDoorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(leftDoorX, groundDoorY, groundDoorW/2, groundDoorH);
+        // X brace on left door
         ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(doorX + 6, doorY + 6); ctx.lineTo(doorX + doorTotalW - 6, doorY + doorH - 6); ctx.moveTo(doorX + doorTotalW - 6, doorY + 6); ctx.lineTo(doorX + 6, doorY + doorH - 6); ctx.stroke();
-        // plank seams
-        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        const seams = Math.max(0, Math.floor((doorTotalW - 6) / 20));
-        for(let si=1; si<=seams; si++){ const px = doorX + Math.round((doorTotalW/(seams+1))*si); ctx.beginPath(); ctx.moveTo(px, doorY + 6); ctx.lineTo(px, doorY + doorH - 6); ctx.stroke(); }
+        ctx.beginPath(); 
+        ctx.moveTo(leftDoorX + 4, groundDoorY + 4); 
+        ctx.lineTo(leftDoorX + groundDoorW/2 - 4, groundDoorY + groundDoorH - 4); 
+        ctx.moveTo(leftDoorX + groundDoorW/2 - 4, groundDoorY + 4); 
+        ctx.lineTo(leftDoorX + 4, groundDoorY + groundDoorH - 4); 
+        ctx.stroke();
+        
+        // Draw right door
+        ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
+        ctx.fillRect(rightDoorX, groundDoorY, groundDoorW/2, groundDoorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(rightDoorX, groundDoorY, groundDoorW/2, groundDoorH);
+        // X brace on right door
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
+        ctx.beginPath(); 
+        ctx.moveTo(rightDoorX + 4, groundDoorY + 4); 
+        ctx.lineTo(rightDoorX + groundDoorW/2 - 4, groundDoorY + groundDoorH - 4); 
+        ctx.moveTo(rightDoorX + groundDoorW/2 - 4, groundDoorY + 4); 
+        ctx.lineTo(rightDoorX + 4, groundDoorY + groundDoorH - 4); 
+        ctx.stroke();
         ctx.restore();
+        
+        // Second level smaller double doors
+        const upperDoorW = Math.max(30, Math.floor(g.width * 0.3));
+        const upperDoorH = Math.max(24, Math.floor(g.height * 0.25));
+        const upperDoorY = g.y + g.height * 0.2;
+        const upperDoorCenterX = g.x + g.width / 2;
+        const upperClosedLeft = upperDoorCenterX - upperDoorW / 2;
+        const upperOpenOffset = Math.round((upperDoorW / 2 + 2) * (g.doorProgress || 0));
+        
+        const upperLeftDoorX = upperClosedLeft - upperOpenOffset;
+        const upperRightDoorX = upperDoorCenterX + upperOpenOffset;
+        
+        // Clear the upper aperture
+        const upperApertureW = upperOpenOffset * 2;
+        if(upperApertureW > 0){
+          ctx.clearRect(upperDoorCenterX - upperApertureW/2, upperDoorY - 2, upperApertureW, upperDoorH + 4);
+        }
+        
+        // Draw upper left door
+        ctx.save();
+        ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
+        ctx.fillRect(upperLeftDoorX, upperDoorY, upperDoorW/2, upperDoorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(upperLeftDoorX, upperDoorY, upperDoorW/2, upperDoorH);
+        // X brace on upper left door
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); 
+        ctx.moveTo(upperLeftDoorX + 3, upperDoorY + 3); 
+        ctx.lineTo(upperLeftDoorX + upperDoorW/2 - 3, upperDoorY + upperDoorH - 3); 
+        ctx.moveTo(upperLeftDoorX + upperDoorW/2 - 3, upperDoorY + 3); 
+        ctx.lineTo(upperLeftDoorX + 3, upperDoorY + upperDoorH - 3); 
+        ctx.stroke();
+        
+        // Draw upper right door
+        ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
+        ctx.fillRect(upperRightDoorX, upperDoorY, upperDoorW/2, upperDoorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(upperRightDoorX, upperDoorY, upperDoorW/2, upperDoorH);
+        // X brace on upper right door
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); 
+        ctx.moveTo(upperRightDoorX + 3, upperDoorY + 3); 
+        ctx.lineTo(upperRightDoorX + upperDoorW/2 - 3, upperDoorY + upperDoorH - 3); 
+        ctx.moveTo(upperRightDoorX + upperDoorW/2 - 3, upperDoorY + 3); 
+        ctx.lineTo(upperRightDoorX + 3, upperDoorY + upperDoorH - 3); 
+        ctx.stroke();
+        ctx.restore();
+        
+        // Roof
         ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
         ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-20); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
         ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.stroke();
@@ -580,22 +781,130 @@
       }
 
       if(g.type==='horse'){
-        const bob=Math.sin(frameCount*0.1 + g.phase)*2;
+        // Draw post and rail fence if this horse has one
+        if(g.hasFence){
+          const fenceLeft = g.x - 30;
+          const fenceRight = g.x + g.width + 30;
+          const fenceBottom = g.y + g.height + 5;
+          const fenceHeight = 25;
+          const fenceTop = fenceBottom - fenceHeight;
+          
+          // Posts
+          ctx.fillStyle = '#654321';
+          const postWidth = 4;
+          const postCount = 5;
+          const postSpacing = (fenceRight - fenceLeft) / (postCount - 1);
+          for(let i=0; i<postCount; i++){
+            const px = fenceLeft + i * postSpacing;
+            ctx.fillRect(px - postWidth/2, fenceTop, postWidth, fenceHeight);
+          }
+          
+          // Rails (2 horizontal)
+          ctx.strokeStyle = '#654321';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(fenceLeft, fenceTop + fenceHeight * 0.3);
+          ctx.lineTo(fenceRight, fenceTop + fenceHeight * 0.3);
+          ctx.stroke();
+          
+          ctx.beginPath();
+          ctx.moveTo(fenceLeft, fenceTop + fenceHeight * 0.7);
+          ctx.lineTo(fenceRight, fenceTop + fenceHeight * 0.7);
+          ctx.stroke();
+        }
+        
+        const bob=Math.sin(frameCount*0.1 + g.phase)*1.5;
         const legPhase=(frameCount*0.2 + g.phase);
-        const legOffset=Math.sin(legPhase)*2;
         const yBase=g.y + bob;
-        ctx.fillStyle='#654321'; ctx.fillRect(g.x, yBase+g.height*0.4, g.width, g.height*0.6);
-        ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.strokeRect(g.x, yBase+g.height*0.4, g.width, g.height*0.6);
-        const nx=g.x+g.width*0.15, ny=yBase+g.height*0.1, nw=g.width*0.35, nh=g.height*0.4;
-        ctx.fillStyle='#4b3621'; ctx.fillRect(nx, ny, nw, nh);
-        ctx.strokeRect(nx, ny, nw, nh);
-        ctx.fillStyle='#3b2a1a'; for(let i=0;i<4;i++){ const px=nx + i*(nw/4); const flick=4 + 3*Math.max(0, Math.sin(frameCount*0.3 + g.phase + i)); ctx.beginPath(); ctx.moveTo(px,ny); ctx.lineTo(px+nw/8,ny-flick); ctx.lineTo(px+nw/4,ny); ctx.closePath(); ctx.fill(); }
-        ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(g.x+g.width*0.45, yBase+g.height*0.05, 3, 0, Math.PI*2); ctx.fill();
+        
+        // body - more oval/rounded
+        ctx.fillStyle='#654321';
+        ctx.beginPath();
+        ctx.ellipse(g.x + g.width*0.5, yBase + g.height*0.55, g.width*0.48, g.height*0.35, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.stroke();
+        
+        // neck - curved arc
+        const neckX = g.x + g.width*0.2;
+        const neckY = yBase + g.height*0.45;
+        ctx.fillStyle='#5a4528';
+        ctx.beginPath();
+        ctx.ellipse(neckX, neckY, g.width*0.18, g.height*0.32, -0.3, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // head - smaller ellipse
+        const headX = neckX - g.width*0.08;
+        const headY = neckY - g.height*0.25;
+        ctx.fillStyle='#5a4528';
+        ctx.beginPath();
+        ctx.ellipse(headX, headY, g.width*0.15, g.height*0.18, -0.2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // ear - small triangle
         ctx.fillStyle='#4b3621';
-        for(let i=0;i<4;i++){ const lx=g.x+g.width*(0.1+0.25*i/3); ctx.fillRect(lx+legOffset, yBase+g.height*0.9, 3, g.height*0.1); if(frameCount%8===0 && Math.random()<0.3){ dustParticles.push({x:lx+legOffset, y:yBase+g.height, size:2+Math.random()*2, alpha:1, vy:-0.5-Math.random()}); } }
-        const rx=g.x, ry=yBase+g.height*0.45, sway=Math.sin(frameCount*0.25 + g.phase)*(g.height*0.08);
-        ctx.strokeStyle='#3b2a1a'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(rx,ry); ctx.quadraticCurveTo(rx-g.width*0.15, ry+sway, rx-g.width*0.35, ry+sway*1.5); ctx.stroke();
-        ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.strokeRect(g.x,yBase,g.width,g.height);
+        ctx.beginPath();
+        ctx.moveTo(headX - g.width*0.05, headY - g.height*0.15);
+        ctx.lineTo(headX, headY - g.height*0.22);
+        ctx.lineTo(headX + g.width*0.05, headY - g.height*0.15);
+        ctx.closePath();
+        ctx.fill();
+        
+        // eye
+        ctx.fillStyle='#000';
+        ctx.beginPath();
+        ctx.arc(headX + g.width*0.05, headY - g.height*0.05, 2, 0, Math.PI*2);
+        ctx.fill();
+        
+        // mane - multiple curved strands
+        ctx.strokeStyle='#3b2a1a'; ctx.lineWidth=2; ctx.lineCap='round';
+        for(let i=0;i<3;i++){
+          const manePhase = frameCount*0.25 + g.phase + i*0.5;
+          const flick = 3 + 2*Math.sin(manePhase);
+          const mx = neckX - g.width*0.05 + i*g.width*0.08;
+          const my = neckY - g.height*0.15;
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.quadraticCurveTo(mx - g.width*0.08, my - flick, mx - g.width*0.12, my - flick*1.2);
+          ctx.stroke();
+        }
+        
+        // legs - with knees and hooves
+        ctx.fillStyle='#5a4528';
+        const legW = 4;
+        for(let i=0;i<4;i++){
+          const lx = g.x + g.width*(0.15 + 0.22*i);
+          const legAnim = Math.sin(legPhase + i*Math.PI/2)*3;
+          const topY = yBase + g.height*0.75;
+          const kneeY = topY + g.height*0.15;
+          const hoofY = yBase + g.height;
+          
+          // upper leg
+          ctx.fillRect(lx + legAnim*0.5, topY, legW, g.height*0.15);
+          // lower leg
+          ctx.fillRect(lx + legAnim, kneeY, legW, g.height*0.1);
+          // hoof
+          ctx.fillStyle='#2a1810';
+          ctx.fillRect(lx + legAnim - 1, hoofY - 3, legW + 2, 3);
+          ctx.fillStyle='#5a4528';
+          
+          // dust effect
+          if(frameCount%8===0 && Math.random()<0.3){
+            dustParticles.push({x:lx+legAnim, y:hoofY, size:2+Math.random()*2, alpha:1, vy:-0.5-Math.random()});
+          }
+        }
+        
+        // tail - curved stroke
+        const tailX = g.x + g.width*0.95;
+        const tailY = yBase + g.height*0.5;
+        const sway = Math.sin(frameCount*0.2 + g.phase)*(g.height*0.12);
+        ctx.strokeStyle='#3b2a1a'; ctx.lineWidth=3; ctx.lineCap='round';
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.quadraticCurveTo(tailX + g.width*0.15, tailY + sway*0.5, tailX + g.width*0.25, tailY + sway);
+        ctx.stroke();
+        
         return;
       }
 
