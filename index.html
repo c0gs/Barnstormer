@@ -33,8 +33,10 @@
     const w=()=>canvas.clientWidth, h=()=>canvas.clientHeight;
     const CAMERA_X = 150; // fixed on-screen x for the plane (camera follows world)
     const plane={x:CAMERA_X,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
-      // looping state: when true, plane will perform continuous loops driven by A/D
-      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.02
+      // looping state: some legacy fields kept for compatibility
+      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.02,
+      // crash state
+      alive:true, crashed:false
     };
     let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
     const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
@@ -320,6 +322,18 @@
       rings = rings.filter(r => !(r.collected && (r.x < -r.radius)) );
     }
 
+    function crashPlane(){
+      if(!plane.alive) return;
+      plane.alive = false;
+      plane.crashed = true;
+      plane.propAngle = 0;
+      const hud = document.getElementById('hud');
+      if(hud) hud.textContent = 'CRASHED';
+      try{ playChime(); }catch(e){}
+      // spawn crash dust
+      for(let i=0;i<20;i++){ dustParticles.push({x:plane.x + (Math.random()*80-40), y:plane.y + (Math.random()*40-20), size:2+Math.random()*4, alpha:1, vy:-1-Math.random()*2}); }
+    }
+
     // === World step ===
     function worldStep(speed){
       drawSky();
@@ -401,6 +415,23 @@
       groundElements=groundElements.filter(g=>g.x>-g.width);
       rings=rings.filter(r=>r.x>-r.radius || !r.collected);
       bullets=bullets.filter(b=>b.x < w()+40);
+
+      // plane collision checks (only when alive)
+      if(plane.alive){
+        // ground collision: if plane hits the ground surface
+        const groundTop = h() - 60;
+        const planeHalfH = 15;
+        if(plane.y + planeHalfH >= groundTop){ crashPlane(); }
+
+        // bounding-box collision with ground elements/buildings
+        const px = plane.x - 30; const py = plane.y - 15; const pw = 60; const ph = 30;
+        for(const g of groundElements){
+          const gx = g.x, gy = g.y, gw = g.width, gh = g.height;
+          if(px < gx + gw && px + pw > gx && py < gy + gh && py + ph > gy){
+            crashPlane(); break;
+          }
+        }
+      }
 
       // draw
       clouds.forEach(drawCloud);
