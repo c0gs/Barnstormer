@@ -609,7 +609,7 @@
         const winH = Math.min(20, Math.max(12, Math.floor((g.height - (rows+1)*6) / rows)));
         const gapX = (g.width - cols*winW) / (cols+1);
         const gapY = (g.height - rows*winH) / (rows+1);
-        for(let ry=0; ry<rows; ry++){
+        for(let ry=0; ry<rows-1; ry++){
           for(let cx=0; cx<cols; cx++){
             const wx = Math.round(g.x + gapX + cx*(winW+gapX));
             const wy = Math.round(g.y + gapY + ry*(winH+gapY));
