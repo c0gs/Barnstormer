@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <div id="hud">W/S: up/down • Shift: speed boost • Space: fire
+  <div id="hud">W/S or A/D: up/down • Shift: speed boost • Space: fire
     <button id="mute" style="margin-left:8px;border:0;background:#fff;border-radius:6px;padding:4px 8px;cursor:pointer">🔊</button>
   </div>
   <canvas id="game"></canvas>
@@ -31,7 +31,10 @@
 
     // === State ===
     const w=()=>canvas.clientWidth, h=()=>canvas.clientHeight;
-    const plane={x:150,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0};
+    const plane={x:150,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
+      // looping state: when true, plane will perform continuous loops driven by A/D
+      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.12
+    };
     let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
     const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
     let distRing=0,distGround=0,distCloud=0;
@@ -258,6 +261,8 @@
     // === Plane ===
     function drawPlane(){
       ctx.save(); ctx.translate(plane.x,plane.y);
+      // apply tilt/rotation from controls (plane.angle)
+      ctx.rotate(plane.angle);
       // fuselage
       ctx.fillStyle='#c33'; ctx.beginPath(); ctx.ellipse(0,0,35,10,0,0,Math.PI*2); ctx.fill();
       // wings
@@ -305,11 +310,52 @@
     function worldStep(speed){
       drawSky();
 
-      // input: W/S immediate, no momentum
-      if(keys['w']) plane.y-=2;
-      if(keys['s']) plane.y+=2;
-      // clamp above ground
-      const floorY=h()-60-10; if(plane.y>floorY) plane.y=floorY; if(plane.y<10) plane.y=10;
+      // Looping with A/D: when A or D is held (exclusively), enter loop mode
+      const wantLoopA = !!keys['a'] && !keys['d'];
+      const wantLoopD = !!keys['d'] && !keys['a'];
+      if (wantLoopA || wantLoopD) {
+        const dir = wantLoopA ? -1 : 1;
+        if (!plane.loop) {
+          plane.loop = true;
+          plane.loopDir = dir;
+          plane.loopCenterY = plane.y; // center the loop where the plane currently is
+          plane.loopProgress = 0;
+        } else {
+          plane.loopDir = dir;
+        }
+      } else {
+        // stop looping when neither A nor D is held
+        if (plane.loop) {
+          plane.loop = false;
+          plane.loopProgress = 0;
+        }
+      }
+
+      if (plane.loop) {
+        // perform circular loop motion: update progress, set angle and y along a circle
+        plane.loopProgress += plane.loopDir * plane.loopSpeed;
+        // keep progress in reasonable range to avoid overflow
+        if (plane.loopProgress > Math.PI*2) plane.loopProgress -= Math.PI*2;
+        if (plane.loopProgress < -Math.PI*2) plane.loopProgress += Math.PI*2;
+        // angle follows progress so the plane rotates as it loops
+        plane.angle = plane.loopProgress;
+        // vertical motion along sine gives the loop effect; radius controls loop size
+        plane.y = plane.loopCenterY + Math.sin(plane.loopProgress) * plane.loopRadius;
+      } else {
+        // input: W/S immediate, no momentum (A/D still act as alternate W/S when not looping)
+        if(keys['w'] || keys['a']) plane.y -= 2;
+        if(keys['s'] || keys['d']) plane.y += 2;
+
+        // rotation handling: A/D steer the plane (tilt left/right)
+        let targetAngle = 0;
+        if (keys['a']) targetAngle = -0.35; // tilt up/left
+        else if (keys['d']) targetAngle = 0.35; // tilt down/right
+        // smooth interpolation back to center when released
+        plane.angle += (targetAngle - plane.angle) * 0.15;
+
+        // clamp above ground
+        const floorY=h()-60-10; if(plane.y>floorY) plane.y=floorY; if(plane.y<10) plane.y=10;
+      }
 
       // progress & spawns
       distCloud+=speed; distGround+=speed; distRing+=speed;
