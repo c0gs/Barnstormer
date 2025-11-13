@@ -333,7 +333,10 @@
       // spawn crash dust
       for(let i=0;i<20;i++){ dustParticles.push({x:plane.x + (Math.random()*80-40), y:plane.y + (Math.random()*40-20), size:2+Math.random()*4, alpha:1, vy:-1-Math.random()*2}); }
 
-      // create overlay with restart button
+      // suspend audio if running
+      try{ if(audioCtx && audioCtx.state==='running') audioCtx.suspend(); }catch(e){}
+
+      // create overlay with restart button and use a snapshot of the canvas as background so the crash moment is frozen
       const existing = document.getElementById('crashOverlay');
       if(existing) existing.remove();
       const overlay = document.createElement('div');
@@ -346,10 +349,15 @@
       overlay.style.display = 'flex';
       overlay.style.alignItems = 'center';
       overlay.style.justifyContent = 'center';
-      overlay.style.background = 'rgba(0,0,0,0.45)';
       overlay.style.zIndex = '9999';
+      // snapshot
+      let snapshot = '';
+      try{ snapshot = canvas.toDataURL(); }catch(e){}
+      if(snapshot) overlay.style.background = `rgba(0,0,0,0.45) url('${snapshot}') center/contain no-repeat`;
+      else overlay.style.background = 'rgba(0,0,0,0.45)';
+
       overlay.innerHTML = `
-        <div style="background:#fff;padding:18px 24px;border-radius:12px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.4);">
+        <div style="background:rgba(255,255,255,0.96);padding:18px 24px;border-radius:12px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.4);">
           <div style="font-weight:800;margin-bottom:10px;color:#c00;font-size:20px;">CRASHED</div>
           <div style="margin-bottom:16px;color:#333">You collided — restart?</div>
           <button id="restartBtn" style="padding:8px 14px;border-radius:8px;border:0;background:#0078d4;color:#fff;cursor:pointer">Restart</button>
@@ -357,7 +365,7 @@
       `;
       document.body.appendChild(overlay);
       const btn = document.getElementById('restartBtn');
-      if(btn) btn.addEventListener('click', ()=>{ overlay.remove(); restartGame(); });
+      if(btn) btn.addEventListener('click', ()=>{ overlay.remove(); try{ if(audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch(e){} restartGame(); });
     }
 
     // === World step ===
