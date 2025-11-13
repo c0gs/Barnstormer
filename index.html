@@ -197,7 +197,7 @@
     function pickElementType(prev){
       const weighted = ()=>{
         const r=Math.random();
-        return (r<0.11)?'farmhouse':(r<0.22)?'office':(r<0.39)?'barn':(r<0.64)?'tree':(r<0.75)?'radio':(r<0.86)?'silo':'water';
+        return (r<0.09)?'farmhouse':(r<0.18)?'office':(r<0.32)?'barn':(r<0.62)?'tree':(r<0.71)?'radio':(r<0.83)?'silo':'water';
       };
       let t = weighted();
       let tries=0;
@@ -237,7 +237,7 @@
           baseH = 180 + Math.random()*140; // 180..320
         } else if(type === 'barn'){
           // barns: taller than farmhouse, shorter than silo
-          baseW = 100 + Math.random()*100; // 100..200
+          baseW = 120 + Math.random()*60; // 120..180
           baseH = 100 + Math.random()*60; // 100..160
         } else if(type === 'farmhouse'){
           // farmhouse: taller than trees, shorter than barn
@@ -245,11 +245,11 @@
           baseH = 60 + Math.random()*40; // 60..100
         } else if(type === 'silo'){
           // silo: taller than barn, shorter than water tower
-          baseW = 40 + Math.random()*50; // 40..90
+          baseW = 55 + Math.random()*35; // 55..90
           baseH = 180 + Math.random()*50; // 180..230
         } else if(type === 'water'){
           // water tower: taller than silo, shorter than radio towers
-          baseW = 35 + Math.random()*35; // 35..70
+          baseW = 50 + Math.random()*20; // 50..70
           baseH = 160 + Math.random()*15; // 160..175 (always shorter than min radio tower of 180)
         } else {
           // fallback block
@@ -303,7 +303,16 @@
                     const radioAvoid = ((g.type==='radio'&&type!=='radio')||(type==='radio'&&g.type!=='radio')) ? 150 : 0;
                     const barnSiloAvoid = ((g.type==='barn'&&type==='silo')||(g.type==='silo'&&type==='barn')) ? 50 : 0;
                     const siloOfficeAvoid = ((g.type==='silo'&&type==='office')||(g.type==='office'&&type==='silo')) ? 140 : 0;
-                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid);
+                    const radioFarmhouseAvoid = ((g.type==='radio'&&type==='farmhouse')||(g.type==='farmhouse'&&type==='radio')) ? 140 : 0;
+                    const radioWaterAvoid = ((g.type==='radio'&&type==='water')||(g.type==='water'&&type==='radio')) ? 140 : 0;
+                    const radioBarnAvoid = ((g.type==='radio'&&type==='barn')||(g.type==='barn'&&type==='radio')) ? 140 : 0;
+                    const farmhouseWaterAvoid = ((g.type==='farmhouse'&&type==='water')||(g.type==='water'&&type==='farmhouse')) ? 140 : 0;
+                    const radioSiloAvoid = ((g.type==='radio'&&type==='silo')||(g.type==='silo'&&type==='radio')) ? 140 : 0;
+                    const radioHorseAvoid = ((g.type==='radio'&&type==='horse')||(g.type==='horse'&&type==='radio')) ? 140 : 0;
+                    const barnWaterAvoid = ((g.type==='barn'&&type==='water')||(g.type==='water'&&type==='barn')) ? 140 : 0;
+                    const waterSiloAvoid = ((g.type==='water'&&type==='silo')||(g.type==='silo'&&type==='water')) ? 140 : 0;
+                    const farmhouseSiloAvoid = ((g.type==='farmhouse'&&type==='silo')||(g.type==='silo'&&type==='farmhouse')) ? 40 : 0;
+                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
               if(!overlap) break;
@@ -315,7 +324,16 @@
               const radioAvoid = ((overlap.type==='radio'&&type!=='radio')||(type==='radio'&&overlap.type!=='radio')) ? 150 : 0;
               const barnSiloAvoid = ((overlap.type==='barn'&&type==='silo')||(overlap.type==='silo'&&type==='barn')) ? 50 : 0;
               const siloOfficeAvoid = ((overlap.type==='silo'&&type==='office')||(overlap.type==='office'&&type==='silo')) ? 140 : 0;
-              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid);
+              const radioFarmhouseAvoid = ((overlap.type==='radio'&&type==='farmhouse')||(overlap.type==='farmhouse'&&type==='radio')) ? 140 : 0;
+              const radioWaterAvoid = ((overlap.type==='radio'&&type==='water')||(overlap.type==='water'&&type==='radio')) ? 140 : 0;
+              const radioBarnAvoid = ((overlap.type==='radio'&&type==='barn')||(overlap.type==='barn'&&type==='radio')) ? 140 : 0;
+              const farmhouseWaterAvoid = ((overlap.type==='farmhouse'&&type==='water')||(overlap.type==='water'&&type==='farmhouse')) ? 140 : 0;
+              const radioSiloAvoid = ((overlap.type==='radio'&&type==='silo')||(overlap.type==='silo'&&type==='radio')) ? 140 : 0;
+              const radioHorseAvoid = ((overlap.type==='radio'&&type==='horse')||(overlap.type==='horse'&&type==='radio')) ? 140 : 0;
+              const barnWaterAvoid = ((overlap.type==='barn'&&type==='water')||(overlap.type==='water'&&type==='barn')) ? 140 : 0;
+              const waterSiloAvoid = ((overlap.type==='water'&&type==='silo')||(overlap.type==='silo'&&type==='water')) ? 140 : 0;
+              const farmhouseSiloAvoid = ((overlap.type==='farmhouse'&&type==='silo')||(overlap.type==='silo'&&type==='farmhouse')) ? 40 : 0;
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid + radioAvoid + barnSiloAvoid + siloOfficeAvoid + radioFarmhouseAvoid + radioWaterAvoid + radioBarnAvoid + farmhouseWaterAvoid + radioSiloAvoid + radioHorseAvoid + barnWaterAvoid + waterSiloAvoid + farmhouseSiloAvoid);
               newX = overlap.x + overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + 10;
               safety++;
               if(safety>50){
@@ -464,12 +482,35 @@
         ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.fillStyle=shadeColorRGB(wall, t*0.25); ctx.fillRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
+        
+        // horizontal siding
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
+        const sidingSpacing = 8;
+        for(let y = g.y + sidingSpacing; y < g.y + g.height; y += sidingSpacing){
+          ctx.beginPath();
+          ctx.moveTo(g.x + 2, y);
+          ctx.lineTo(g.x + g.width - 2, y);
+          ctx.stroke();
+        }
+        
         // outline
         ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         // door
         const dW=g.width*0.2,dH=g.height*0.4,dX=g.x+g.width*0.4,dY=g.y+g.height*0.6;
         ctx.fillStyle=shadeColorRGB([139,69,19],t*0.3); ctx.fillRect(dX,dY,dW,dH);
         ctx.strokeRect(dX,dY,dW,dH);
+        
+        // doorknob
+        const knobX = dX + dW * 0.8;
+        const knobY = dY + dH * 0.5;
+        ctx.fillStyle = '#d4af37'; // gold color
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+        
         // windows with dynamic reflection and night glow
         const winW=g.width*0.2,winH=g.height*0.25;
         const windows=[{x:g.x+g.width*0.1,y:g.y+g.height*0.25},{x:g.x+g.width*0.7,y:g.y+g.height*0.25}];
@@ -488,13 +529,68 @@
           
           ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wi.x,wi.y,winW,winH);
           
+          // cross-shaped window braces
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 1.5;
+          // vertical brace
+          ctx.beginPath();
+          ctx.moveTo(wi.x + winW / 2, wi.y);
+          ctx.lineTo(wi.x + winW / 2, wi.y + winH);
+          ctx.stroke();
+          // horizontal brace
+          ctx.beginPath();
+          ctx.moveTo(wi.x, wi.y + winH / 2);
+          ctx.lineTo(wi.x + winW, wi.y + winH / 2);
+          ctx.stroke();
+          
           // specular highlight
           ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wi.x+winW*0.12, wi.y+winH*0.08, winW*0.5, winH*0.18);
         });
-        // roof
-        ctx.fillStyle=shadeColorRGB([165,42,42],t*0.25);
+        // roof with shingles - black
+        ctx.fillStyle=shadeColorRGB([20,20,20],t*0.25);
         ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-18); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
         ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=1; ctx.stroke();
+        
+        // black shingles
+        ctx.fillStyle = 'rgba(30,30,30,0.6)';
+        const shingleHeight = 3;
+        const shingleWidth = 8;
+        const roofPeakX = g.x + g.width / 2;
+        const roofPeakY = g.y - 18;
+        
+        // left side shingles
+        for(let row = 0; row < 6; row++){
+          const y = roofPeakY + row * shingleHeight;
+          const leftX = roofPeakX - (row + 1) * (g.width / 2 / 6);
+          const rightX = roofPeakX;
+          const rowWidth = rightX - leftX;
+          const numShingles = Math.ceil(rowWidth / shingleWidth);
+          const offsetX = (row % 2) * (shingleWidth / 2);
+          
+          for(let i = 0; i < numShingles; i++){
+            const sx = leftX + i * shingleWidth + offsetX;
+            if(sx < roofPeakX){
+              ctx.fillRect(sx, y, shingleWidth - 0.5, shingleHeight - 0.5);
+            }
+          }
+        }
+        
+        // right side shingles
+        for(let row = 0; row < 6; row++){
+          const y = roofPeakY + row * shingleHeight;
+          const leftX = roofPeakX;
+          const rightX = roofPeakX + (row + 1) * (g.width / 2 / 6);
+          const rowWidth = rightX - leftX;
+          const numShingles = Math.ceil(rowWidth / shingleWidth);
+          const offsetX = (row % 2) * (shingleWidth / 2);
+          
+          for(let i = 0; i < numShingles; i++){
+            const sx = leftX + i * shingleWidth + offsetX;
+            if(sx + shingleWidth > leftX && sx < rightX){
+              ctx.fillRect(sx, y, shingleWidth - 0.5, shingleHeight - 0.5);
+            }
+          }
+        }
+        
         ctx.restore();
         return;
       }
@@ -537,6 +633,33 @@
             ctx.fillRect(wx + Math.round(winW*0.12), wy + Math.round(winH*0.08), Math.round(winW*0.45), Math.round(winH*0.16));
           }
         }
+        
+        // Draw door in center of ground floor
+        const doorW = Math.min(28, g.width * 0.2);
+        const doorH = Math.min(40, g.height * 0.18);
+        const doorX = g.x + (g.width - doorW) / 2;
+        const doorY = g.y + g.height - doorH;
+        
+        // door frame
+        ctx.fillStyle = shadeColorRGB([80,80,80], t*0.35);
+        ctx.fillRect(doorX, doorY, doorW, doorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(doorX, doorY, doorW, doorH);
+        
+        // door panels (two vertical panels)
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+        ctx.strokeRect(doorX + 2, doorY + 2, doorW/2 - 3, doorH - 4);
+        ctx.strokeRect(doorX + doorW/2 + 1, doorY + 2, doorW/2 - 3, doorH - 4);
+        
+        // doorknob
+        const knobSize = 2;
+        const knobX = doorX + doorW * 0.65;
+        const knobY = doorY + doorH * 0.5;
+        ctx.fillStyle = shadeColorRGB([180,180,120], t*0.2);
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, knobSize, 0, Math.PI * 2);
+        ctx.fill();
+        
         ctx.restore();
         return;
       }
@@ -576,13 +699,51 @@
 
       if(g.type==='radio'){
         const baseX=g.x+g.width/2, topY=g.y, botY=g.y+g.height;
+        
+        // Guide wires (3 on each side) - draw first so they're behind the tower
+        ctx.strokeStyle='rgba(100,100,100,0.4)'; ctx.lineWidth=1;
+        const guideHeights = [0.3, 0.5, 0.7]; // attachment points as fractions of tower height
+        for(let i=0; i<3; i++){
+          const attachY = topY + g.height * guideHeights[i];
+          // Left side guide wire
+          ctx.beginPath();
+          ctx.moveTo(baseX - g.width/2 - 30, botY);
+          ctx.lineTo(baseX - g.width*0.2 - (g.width*0.3 * (1-guideHeights[i])), attachY);
+          ctx.stroke();
+          // Right side guide wire
+          ctx.beginPath();
+          ctx.moveTo(baseX + g.width/2 + 30, botY);
+          ctx.lineTo(baseX + g.width*0.2 + (g.width*0.3 * (1-guideHeights[i])), attachY);
+          ctx.stroke();
+        }
+        
+        // Tower structure
         ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1;
         ctx.beginPath();
         ctx.moveTo(baseX-g.width/2,botY); ctx.lineTo(baseX-g.width*0.2,topY);
         ctx.moveTo(baseX+g.width/2,botY); ctx.lineTo(baseX+g.width*0.2,topY);
         for(let y=0;y<g.height;y+=12){ const yPos=botY-y; const t=(y/g.height); const half=lerp(g.width/2,g.width*0.2,t); ctx.moveTo(baseX-half,yPos); ctx.lineTo(baseX+half,yPos-6); }
         ctx.stroke();
-        ctx.fillStyle='#777'; ctx.beginPath(); ctx.arc(baseX, topY-6, 6, 0, Math.PI*2); ctx.fill();
+        
+        // Top antenna point
+        const pointY = topY - 12;
+        ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(baseX, topY-6);
+        ctx.lineTo(baseX, pointY);
+        ctx.stroke();
+        
+        // Red light on top
+        ctx.fillStyle='#ff0000'; 
+        ctx.beginPath(); 
+        ctx.arc(baseX, topY-6, 4, 0, Math.PI*2); 
+        ctx.fill();
+        // Light glow
+        ctx.fillStyle='rgba(255,0,0,0.3)';
+        ctx.beginPath();
+        ctx.arc(baseX, topY-6, 7, 0, Math.PI*2);
+        ctx.fill();
+        
         // outline base block
         ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(g.x, g.y, g.width, g.height);
         return;
@@ -653,22 +814,15 @@
         ctx.stroke();
         ctx.restore();
         
-        // Second level smaller double doors
+        // Second level smaller double doors (always closed)
         const upperDoorW = Math.max(30, Math.floor(g.width * 0.3));
         const upperDoorH = Math.max(24, Math.floor(g.height * 0.25));
         const upperDoorY = g.y + g.height * 0.2;
         const upperDoorCenterX = g.x + g.width / 2;
         const upperClosedLeft = upperDoorCenterX - upperDoorW / 2;
-        const upperOpenOffset = Math.round((upperDoorW / 2 + 2) * (g.doorProgress || 0));
         
-        const upperLeftDoorX = upperClosedLeft - upperOpenOffset;
-        const upperRightDoorX = upperDoorCenterX + upperOpenOffset;
-        
-        // Clear the upper aperture
-        const upperApertureW = upperOpenOffset * 2;
-        if(upperApertureW > 0){
-          ctx.clearRect(upperDoorCenterX - upperApertureW/2, upperDoorY - 2, upperApertureW, upperDoorH + 4);
-        }
+        const upperLeftDoorX = upperClosedLeft;
+        const upperRightDoorX = upperDoorCenterX;
         
         // Draw upper left door
         ctx.save();
@@ -698,10 +852,45 @@
         ctx.stroke();
         ctx.restore();
         
-        // Roof
+        // Roof - half octagon shape
         ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
-        ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-20); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        const roofBaseY = g.y;
+        const roofPeakY = g.y - 30;
+        const roofLeft = g.x;
+        const roofRight = g.x + g.width;
+        const roofCenterX = g.x + g.width / 2;
+        const seg = g.width / 4; // segment width for octagon sides
+        
+        // Start at bottom left
+        ctx.moveTo(roofLeft, roofBaseY);
+        // First angled side (bottom left to mid-left)
+        ctx.lineTo(roofLeft + seg * 0.3, roofBaseY - seg * 0.4);
+        // Second angled side (mid-left to upper-left)
+        ctx.lineTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        // Top left to peak
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        // Peak to top right
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        // Upper-right angled
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        // Mid-right angled
+        ctx.lineTo(roofRight - seg * 0.3, roofBaseY - seg * 0.4);
+        // Bottom right
+        ctx.lineTo(roofRight, roofBaseY);
+        ctx.closePath();
+        ctx.fill();
         ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.stroke();
+        
+        // Silver border along the top edge
+        ctx.strokeStyle='rgba(192,192,192,0.9)'; ctx.lineWidth=2.5;
+        ctx.beginPath();
+        ctx.moveTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        ctx.stroke();
+        
         ctx.restore();
         return;
       }
@@ -713,14 +902,14 @@
         const bx = g.x, by = g.y;
         // shadow on ground
         ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5+sx, by+bodyH+6+sy, bodyW*0.6, bodyW*0.18, 0,0,Math.PI*2); ctx.fill();
-        // body
-        const baseColor = shadeColorRGB([190,190,200], t*0.08);
+        // body - white
+        const baseColor = shadeColorRGB([255,255,255], t*0.08);
         ctx.fillStyle = baseColor; ctx.fillRect(bx, by, bodyW, bodyH);
 
-        // ladder on the side (right side) - vertical rails + rungs
+        // ladder on the side (right side) - vertical rails + rungs - black
         const ladderX = Math.round(bx + bodyW*0.82);
         const railOffset = 4;
-        ctx.strokeStyle = 'rgba(70,70,80,0.95)'; ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
         // rails
         ctx.beginPath(); ctx.moveTo(ladderX-railOffset, by+8); ctx.lineTo(ladderX-railOffset, by+bodyH-8); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(ladderX+railOffset, by+8); ctx.lineTo(ladderX+railOffset, by+bodyH-8); ctx.stroke();
@@ -728,16 +917,40 @@
         ctx.lineWidth = 1.5;
         for(let ry = by+14; ry < by + bodyH - 10; ry += 12){ ctx.beginPath(); ctx.moveTo(ladderX-railOffset, ry); ctx.lineTo(ladderX+railOffset, ry); ctx.stroke(); }
 
-        // top ellipse (slightly larger vertical radius to make a rounder dome)
-        ctx.fillStyle = shadeColorRGB([210,210,220], t*0.04);
-        ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5, by+6, bodyW*0.56, 12, 0, 0, Math.PI*2); ctx.fill();
-        // subtle rim highlight
-        ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5, by+4, bodyW*0.52, 6, 0, 0, Math.PI*2); ctx.stroke();
+        // half octagon roof - white
+        ctx.fillStyle = shadeColorRGB([255,255,255], t*0.04);
+        ctx.beginPath();
+        const roofBaseY = by;
+        const roofPeakY = by - 20;
+        const roofLeft = bx;
+        const roofRight = bx + bodyW;
+        const roofCenterX = bx + bodyW / 2;
+        const seg = bodyW / 4; // segment width for octagon sides
+        
+        // Start at bottom left
+        ctx.moveTo(roofLeft, roofBaseY);
+        // First angled side (bottom left to mid-left)
+        ctx.lineTo(roofLeft + seg * 0.3, roofBaseY - seg * 0.4);
+        // Second angled side (mid-left to upper-left)
+        ctx.lineTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        // Top left to peak
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        // Peak to top right
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        // Upper-right angled
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        // Mid-right angled
+        ctx.lineTo(roofRight - seg * 0.3, roofBaseY - seg * 0.4);
+        // Bottom right
+        ctx.lineTo(roofRight, roofBaseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.stroke();
 
         // bands
         ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1; for(let y=by+12;y<by+bodyH-6;y+=12){ ctx.beginPath(); ctx.moveTo(bx+6,y); ctx.lineTo(bx+bodyW-6,y); ctx.stroke(); }
-        // outline
-        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(bx, by, bodyW, bodyH);
+        // outline - black
+        ctx.strokeStyle='rgba(0,0,0,1.0)'; ctx.lineWidth=2; ctx.strokeRect(bx, by, bodyW, bodyH);
         ctx.restore();
         return;
       }
@@ -746,36 +959,68 @@
         // municipal water tower: tall legs and a tank on top
         ctx.save();
         const wx = g.x, wy = g.y, ww = g.width, wh = g.height;
-        // legs
+        // legs - black outline
         const legW = Math.max(3, Math.round(ww*0.12));
         const legH = Math.round(wh*0.7);
-        ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=2;
+        ctx.strokeStyle='rgba(0,0,0,1.0)'; ctx.lineWidth=2;
         const lx1 = wx+ww*0.25, lx2 = wx+ww*0.75; const legTop = wy + (wh - legH);
         ctx.beginPath(); ctx.moveTo(lx1, wy+wh); ctx.lineTo(lx1 - 8, legTop); ctx.lineTo(lx1, legTop); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(lx2, wy+wh); ctx.lineTo(lx2 + 8, legTop); ctx.lineTo(lx2, legTop); ctx.stroke();
         // central support
         ctx.beginPath(); ctx.moveTo(wx+ww*0.5, wy+wh); ctx.lineTo(wx+ww*0.5, legTop+4); ctx.stroke();
-        // tank: make the top rounder (taller dome) and add smoother shading
+        // tank - gray with half octagon roof
         const tankW = ww * 1.2; const tankH = Math.max(18, Math.round(wh*0.16));
         const tankX = Math.round(wx + (ww - tankW)/2);
-        const tankY = legTop - tankH - 6; // shift up a bit for bigger dome
-        // dome (upper cap) with larger vertical radius for a rounder look
-        const domeRadiusY = 14; const domeRadiusX = tankW*0.52;
-        // glossy gradient for tank
-        const tankGrad = ctx.createLinearGradient(tankX, tankY, tankX, tankY + tankH + domeRadiusY);
-        tankGrad.addColorStop(0, lerpColorStr([230,240,250],[200,220,230], t*0.2));
-        tankGrad.addColorStop(0.4, lerpColorStr([200,220,230],[170,190,200], t*0.08));
-        tankGrad.addColorStop(1, lerpColorStr([160,180,200],[140,160,180], t*0.02));
+        const roofHeight = 20;
+        const tankY = legTop - tankH - roofHeight - 2;
+        // gray gradient for tank
+        const tankGrad = ctx.createLinearGradient(tankX, tankY, tankX, tankY + tankH + roofHeight);
+        tankGrad.addColorStop(0, lerpColorStr([180,180,180],[160,160,160], t*0.2));
+        tankGrad.addColorStop(0.4, lerpColorStr([150,150,150],[130,130,130], t*0.08));
+        tankGrad.addColorStop(1, lerpColorStr([120,120,120],[100,100,100], t*0.02));
         ctx.fillStyle = tankGrad;
-        // dome
-        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY, domeRadiusX, domeRadiusY, 0, Math.PI, 0, true); ctx.fill();
+        
+        // half octagon roof - gray
+        ctx.beginPath();
+        const roofBaseY = tankY + roofHeight;
+        const roofPeakY = tankY;
+        const roofLeft = tankX;
+        const roofRight = tankX + tankW;
+        const roofCenterX = tankX + tankW / 2;
+        const seg = tankW / 4; // segment width for octagon sides
+        
+        // Start at bottom left
+        ctx.moveTo(roofLeft, roofBaseY);
+        // First angled side (bottom left to mid-left)
+        ctx.lineTo(roofLeft + seg * 0.3, roofBaseY - seg * 0.4);
+        // Second angled side (mid-left to upper-left)
+        ctx.lineTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
+        // Top left to peak
+        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
+        // Peak to top right
+        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
+        // Upper-right angled
+        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
+        // Mid-right angled
+        ctx.lineTo(roofRight - seg * 0.3, roofBaseY - seg * 0.4);
+        // Bottom right
+        ctx.lineTo(roofRight, roofBaseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,1.0)'; ctx.lineWidth=2; ctx.stroke();
+        
         // body
-        ctx.fillRect(tankX, tankY + domeRadiusY, tankW, tankH);
+        ctx.fillStyle = tankGrad;
+        ctx.fillRect(tankX, roofBaseY, tankW, tankH);
         // bottom rim ellipse
-        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY + tankH, domeRadiusX, domeRadiusY*0.6, 0, 0, Math.PI*2); ctx.fill();
-        // rim highlight
-        ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + domeRadiusY-2, domeRadiusX*0.92, domeRadiusY*0.82, 0, Math.PI*0.1, Math.PI*0.9); ctx.stroke();
-        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(tankX, tankY + domeRadiusY, tankW, tankH);
+        const bottomRimRadiusY = tankW * 0.18;
+        ctx.beginPath(); 
+        ctx.ellipse(tankX + tankW*0.5, roofBaseY + tankH, tankW*0.5, bottomRimRadiusY, 0, 0, Math.PI*2); 
+        ctx.fill();
+        // body outline - black
+        ctx.strokeStyle='rgba(0,0,0,1.0)'; 
+        ctx.lineWidth=2; 
+        ctx.strokeRect(tankX, roofBaseY, tankW, tankH);
         ctx.restore();
         return;
       }
