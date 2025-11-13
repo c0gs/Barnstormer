@@ -93,21 +93,34 @@
         else if(type==='radio'){ baseW=14+Math.random()*10; baseH=90+Math.random()*80; }
         else if(type==='horse'){ baseW=40+Math.random()*15; baseH=25+Math.random()*10; }
         else { baseW=60+Math.random()*50; baseH=50+Math.random()*50; }
-        let newX, attempts=0;
-        const pad=20, extraBarnTree=100, extraHorseGap=60;
-        const groundY=h()-60-baseH;
-        do{
-          newX=w()+100+Math.random()*200;
-          attempts++;
-        }while(
-          groundElements.some(g=>{
-            const centerA=g.x+g.width/2, centerB=newX+baseW/2;
-            const barnTreeGap=((g.type==='barn'&&type==='tree')||(g.type==='tree'&&type==='barn'))?extraBarnTree:0;
-            const horseAvoid=((g.type==='horse'&&type!=='horse')||(type==='horse'&&g.type!=='horse'))?extraHorseGap:0;
-            const minGap=(g.width/2+baseW/2+pad+barnTreeGap+horseAvoid);
-            return Math.abs(centerA-centerB)<minGap;
-          }) && attempts<20
-        );
+            let newX = w()+100+Math.random()*200;
+            const pad=20, extraBarnTree=100, extraHorseGap=60;
+            const groundY=h()-60-baseH;
+            // If a generated position overlaps existing ground elements, shift it right until it fits.
+            // Use a safety cap to avoid infinite loops.
+            let safety = 0;
+            while(true){
+              const overlap = groundElements.find(g=>{
+                const centerA = g.x + g.width/2;
+                const centerB = newX + baseW/2;
+                const barnTreeGap = ((g.type==='barn'&&type==='tree')||(g.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
+                const horseAvoid = ((g.type==='horse'&&type!=='horse')||(type==='horse'&&g.type!=='horse')) ? extraHorseGap : 0;
+                const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid);
+                return Math.abs(centerA - centerB) < minGap;
+              });
+              if(!overlap) break;
+              // Move newX to just beyond the overlapping element's edge
+              const barnTreeGap = ((overlap.type==='barn'&&type==='tree')||(overlap.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
+              const horseAvoid = ((overlap.type==='horse'&&type!=='horse')||(type==='horse'&&overlap.type!=='horse')) ? extraHorseGap : 0;
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid);
+              newX = overlap.x + overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + 10;
+              safety++;
+              if(safety>50){
+                // fallback: place further to the right
+                newX += 200 + Math.random()*200;
+                break;
+              }
+            }
         const phase=(type==='horse')?Math.random()*Math.PI*2:0;
         groundElements.push({x:newX,y:groundY,width:baseW,height:baseH,type,phase});
       }
