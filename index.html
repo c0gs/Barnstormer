@@ -608,24 +608,35 @@
           for(let cx=0; cx<cols; cx++){
             const wx = Math.round(g.x + gapX + cx*(winW+gapX));
             const wy = Math.round(g.y + gapY + ry*(winH+gapY));
-            // windows get warmer and brighter toward dusk/night
-            const nightGlow = t > 0.5 ? (t - 0.5) * 2 : 0; // glow intensity for night
-            const winColor = lerpColor([40,45,55],[255,240,150], t);
-            const winAlpha = 0.9 + nightGlow * 0.2; // brighter at night
-            // reflective vertical gradient: bright at top to window color
-            const wg = ctx.createLinearGradient(wx, wy, wx, wy+winH);
-            wg.addColorStop(0, t < 0.5 ? 'rgba(255,255,255,0.9)' : `rgba(255,255,200,${winAlpha})`);
-            wg.addColorStop(0.18, `rgba(${winColor[0]},${winColor[1]},${winColor[2]},${winAlpha})`);
-            const bottomColor = lerpColor([20,25,30],[220,180,100], t);
-            wg.addColorStop(1, `rgb(${bottomColor[0]},${bottomColor[1]},${bottomColor[2]})`);
-            ctx.fillStyle = wg;
-            ctx.fillRect(wx, wy, winW, winH);
+            // window color transitions from blue (day) to warm yellow (night)
+            const nightGlow = t > 0.5 ? (t - 0.5) * 2 : 0; // glow factor for night
+            const dayColor = 'rgba(255,255,255,0.85)';
+            const nightColor = `rgba(255,240,150,${0.7 + nightGlow * 0.3})`; // warmer and brighter at night
+            const blendColor = t < 0.5 ? dayColor : nightColor;
             
-            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+            const wg=ctx.createLinearGradient(wx,wy,wx,wy+winH);
+            wg.addColorStop(0, blendColor);
+            wg.addColorStop(0.4, t < 0.5 ? '#b0e0ff' : `rgba(255,220,100,${0.8 + nightGlow * 0.2})`);
+            wg.addColorStop(1, t < 0.5 ? '#87ceeb' : `rgba(255,210,80,${0.6 + nightGlow * 0.2})`);
+            ctx.fillStyle=wg; ctx.fillRect(wx,wy,winW,winH);
             
-            // subtle specular highlight (top-left)
-            ctx.fillStyle = 'rgba(255,255,255,0.16)';
-            ctx.fillRect(wx + Math.round(winW*0.12), wy + Math.round(winH*0.08), Math.round(winW*0.45), Math.round(winH*0.16));
+            ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx,wy,winW,winH);
+            
+            // cross-shaped window braces
+            ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 1.5;
+            // vertical brace
+            ctx.beginPath();
+            ctx.moveTo(wx + winW / 2, wy);
+            ctx.lineTo(wx + winW / 2, wy + winH);
+            ctx.stroke();
+            // horizontal brace
+            ctx.beginPath();
+            ctx.moveTo(wx, wy + winH / 2);
+            ctx.lineTo(wx + winW, wy + winH / 2);
+            ctx.stroke();
+            
+            // specular highlight
+            ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wx+winW*0.12, wy+winH*0.08, winW*0.5, winH*0.18);
           }
         }
         
@@ -910,15 +921,6 @@
         ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
         ctx.stroke();
         
-        // Silver border along the top edge
-        ctx.strokeStyle='rgba(192,192,192,0.9)'; ctx.lineWidth=2.5;
-        ctx.beginPath();
-        ctx.moveTo(roofLeft + seg * 0.7, roofPeakY + seg * 0.3);
-        ctx.lineTo(roofCenterX - seg * 0.4, roofPeakY);
-        ctx.lineTo(roofCenterX + seg * 0.4, roofPeakY);
-        ctx.lineTo(roofRight - seg * 0.7, roofPeakY + seg * 0.3);
-        ctx.stroke();
-        
         ctx.restore();
         return;
       }
@@ -987,13 +989,14 @@
         // municipal water tower: tall legs and a tank on top
         ctx.save();
         const wx = g.x, wy = g.y, ww = g.width, wh = g.height;
-        // legs - black outline
+        // legs - black outline, spreading outward at bottom
         const legW = Math.max(3, Math.round(ww*0.12));
         const legH = Math.round(wh*0.7);
         ctx.strokeStyle='rgba(0,0,0,1.0)'; ctx.lineWidth=2;
-        const lx1 = wx+ww*0.25, lx2 = wx+ww*0.75; const legTop = wy + (wh - legH);
-        ctx.beginPath(); ctx.moveTo(lx1, wy+wh); ctx.lineTo(lx1 - 8, legTop); ctx.lineTo(lx1, legTop); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(lx2, wy+wh); ctx.lineTo(lx2 + 8, legTop); ctx.lineTo(lx2, legTop); ctx.stroke();
+        const legTopX1 = wx+ww*0.25, legTopX2 = wx+ww*0.75; const legTop = wy + (wh - legH);
+        const legBottomX1 = wx, legBottomX2 = wx + ww; // spread to edges at bottom
+        ctx.beginPath(); ctx.moveTo(legBottomX1, wy+wh); ctx.lineTo(legTopX1, legTop); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(legBottomX2, wy+wh); ctx.lineTo(legTopX2, legTop); ctx.stroke();
         // central support
         ctx.beginPath(); ctx.moveTo(wx+ww*0.5, wy+wh); ctx.lineTo(wx+ww*0.5, legTop+4); ctx.stroke();
         // tank - gray with half octagon roof
