@@ -31,9 +31,10 @@
 
     // === State ===
     const w=()=>canvas.clientWidth, h=()=>canvas.clientHeight;
-    const plane={x:150,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
+    const CAMERA_X = 150; // fixed on-screen x for the plane (camera follows world)
+    const plane={x:CAMERA_X,y:h()/2,baseSpeed:1.2,boostSpeed:3,propAngle:0,angle:0,
       // looping state: when true, plane will perform continuous loops driven by A/D
-      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.04
+      loop:false, loopProgress:0, loopDir:0, loopCenterY:h()/2, loopRadius:80, loopSpeed:0.02
     };
     let rings=[],groundElements=[],clouds=[],dustParticles=[],bullets=[];
     const DIST_RING=420,DIST_GROUND=520,DIST_CLOUD=220;
@@ -333,7 +334,7 @@
 
       if (plane.loop) {
         // perform circular loop motion: update progress, set angle and y along a circle
-        plane.loopProgress += plane.loopDir * plane.loopSpeed;
+          plane.loopProgress += plane.loopDir * plane.loopSpeed;
         // keep progress in reasonable range to avoid overflow
         if (plane.loopProgress > Math.PI*2) plane.loopProgress -= Math.PI*2;
         if (plane.loopProgress < -Math.PI*2) plane.loopProgress += Math.PI*2;
@@ -341,6 +342,8 @@
         plane.angle = plane.loopProgress;
         // vertical motion along sine gives the loop effect; radius controls loop size
         plane.y = plane.loopCenterY + Math.sin(plane.loopProgress) * plane.loopRadius;
+        // ensure loop keeps plane on screen vertically
+        plane.y = Math.max(10, Math.min(h()-10, plane.y));
       } else {
         // input: W/S immediate, no momentum (A/D still act as alternate W/S when not looping)
         if(keys['w'] || keys['a']) plane.y -= 2;
@@ -350,12 +353,23 @@
         let targetAngle = 0;
         if (keys['a']) targetAngle = -0.35; // tilt up/left
         else if (keys['d']) targetAngle = 0.35; // tilt down/right
-        // smooth interpolation back to center when released
-        plane.angle += (targetAngle - plane.angle) * 0.15;
+        // smooth interpolation back to center when released (slower for smoother rotation)
+        plane.angle += (targetAngle - plane.angle) * 0.08;
 
-        // clamp above ground
-        const floorY=h()-60-10; if(plane.y>floorY) plane.y=floorY; if(plane.y<10) plane.y=10;
+        // clamp vertically so the plane stays on screen
+        plane.y = Math.max(10, Math.min(h()-10, plane.y));
       }
+
+      // keep the plane at a fixed on-screen X (camera); move world according to heading
+      plane.x = CAMERA_X;
+
+      // movement: compute heading velocity (based on current angle)
+      const headingSpeedFactor = 0.6;
+      const vx = Math.cos(plane.angle) * speed * headingSpeedFactor;
+      // vy is already applied to plane.y when not looping; we don't need vy here for world scroll
+
+      // world scroll should match plane's intended horizontal movement: increase scroll when plane points right
+      const worldShift = speed + vx;
 
       // progress & spawns
       distCloud+=speed; distGround+=speed; distRing+=speed;
@@ -363,19 +377,11 @@
       if(distGround>=DIST_GROUND){ spawnGroundElements(); distGround=0; }
       if(distRing>=DIST_RING){ spawnRing(); distRing=0; }
 
-      // movement: let the plane move in the direction it's facing
-      // apply a portion of the scroll speed along the plane heading so it flies where it points
-      const headingSpeedFactor = 0.6;
-      const vx = Math.cos(plane.angle) * speed * headingSpeedFactor;
-      const vy = Math.sin(plane.angle) * speed * headingSpeedFactor;
-      plane.x += vx;
-      plane.y += vy;
-
       // scroll world (Shift only affects horizontal, not vertical)
-      for(const c of clouds) c.x -= speed*0.6;
-      for(const g of groundElements) g.x -= speed;
-      for(const r of rings) r.x -= speed;
-      for(const b of bullets) b.x += (b.speed - speed);
+      for(const c of clouds) c.x -= worldShift*0.6;
+      for(const g of groundElements) g.x -= worldShift;
+      for(const r of rings) r.x -= worldShift;
+      for(const b of bullets) b.x += (b.speed - worldShift);
 
       // cull
       clouds=clouds.filter(c=>c.x>-c.size);
