@@ -52,6 +52,7 @@
 
     // === Lighting helpers (dynamic sky & ground) ===
     let sunlightAngle=0; // drives time-of-day and shadow direction
+    let stars = [];
     const clamp01=x=>Math.max(0,Math.min(1,x));
     const lerp=(a,b,t)=>a+(b-a)*t;
     const lerpColor=(c1,c2,t)=>{
@@ -62,15 +63,53 @@
       return `rgb(${r},${g},${b})`;
     };
     const dayToDuskT=()=>clamp01((Math.sin(sunlightAngle- Math.PI/2)+1)/2); // 0 midday -> 1 dusk
+    const sunPhase=()=>clamp01((Math.sin(sunlightAngle)+1)/2); // 0 night -> 1 day
+
+    function generateStars(count){
+      stars = [];
+      for(let i=0;i<count;i++){
+        stars.push({ x: Math.random()*w(), y: Math.random()*h()*0.55, size: Math.random()*1.8+0.2, alpha: Math.random()*0.9 });
+      }
+    }
+    let lastTime = null;
+    const dayDuration = 60; // seconds for a full day/night cycle
 
     function drawSky(){
       const t=dayToDuskT();
-      const top = lerpColor([135,206,235],[255,178,122],t);
-      const bot = lerpColor([176,224,255],[240,108,59],t);
+      const sun = sunPhase();
+      const top = lerpColor([135,206,235],[20,20,48], 1 - sun); // blue day -> dark night
+      const bot = lerpColor([176,224,255],[10,10,30], 1 - sun);
       const g=ctx.createLinearGradient(0,0,0,h());
       g.addColorStop(0,top); g.addColorStop(1,bot);
       ctx.fillStyle=g; ctx.fillRect(0,0,w(),h());
-      const groundColor=lerpColor([34,139,34],[25,90,25],t);
+
+      // sun during day (soft glow) and stars/moon at night
+      const nightFactor = 1 - sun;
+      // sun path: move the sun along an arc across the sky using sunlightAngle
+      if(sun > 0.05){
+        const sunArcX = w()*0.5 + Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
+        const sunArcY = h()*0.22 + Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
+        // radial glow
+        const rg = ctx.createRadialGradient(sunArcX, sunArcY, 6, sunArcX, sunArcY, 120);
+        rg.addColorStop(0, 'rgba(255,250,200,0.95)'); rg.addColorStop(0.2, 'rgba(255,235,120,0.6)'); rg.addColorStop(0.6, 'rgba(255,200,80,0.12)'); rg.addColorStop(1, 'rgba(255,200,80,0)');
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(sunArcX, sunArcY, 120, 0, Math.PI*2); ctx.fill();
+        // core
+        ctx.fillStyle = 'rgba(255,245,180,1)'; ctx.beginPath(); ctx.arc(sunArcX, sunArcY, 22, 0, Math.PI*2); ctx.fill();
+      }
+
+      if(nightFactor > 0.05){
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.9, nightFactor*1.2);
+        for(const s of stars){ ctx.fillStyle = `rgba(255,255,255,${s.alpha*nightFactor})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill(); }
+        // moon (opposite the sun)
+        const moonX = w()*0.5 - Math.cos(sunlightAngle - Math.PI/2) * (w()*0.38);
+        const moonY = h()*0.22 - Math.sin(sunlightAngle - Math.PI/2) * (h()*0.16);
+        ctx.fillStyle = `rgba(255,245,220,${0.6*nightFactor})`;
+        ctx.beginPath(); ctx.arc(moonX, moonY, 28, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+
+      const groundColor=lerpColor([34,139,34],[12,40,12], 1 - sun);
       ctx.fillStyle=groundColor; ctx.fillRect(0,h()-60,w(),60);
     }
 
@@ -87,15 +126,40 @@
       // choose 1-3 elements, non-overlapping, extra spacing rules (barn-tree, horses)
       const count=Math.floor(Math.random()*3)+1;
       for(let i=0;i<count;i++){
-        // type distribution incl. radio and horse
+        // type distribution including radio, silo, water and horse
         const r=Math.random();
-        let type=(r<0.18)?'farmhouse':(r<0.36)?'office':(r<0.54)?'barn':(r<0.72)?'tree':(r<0.9)?'radio':'horse';
-        // sizes
-        let baseW,baseH; 
-        if(type==='tree'){ baseW=20+Math.random()*20; baseH=50+Math.random()*60; }
-        else if(type==='radio'){ baseW=14+Math.random()*10; baseH=90+Math.random()*80; }
-        else if(type==='horse'){ baseW=40+Math.random()*15; baseH=25+Math.random()*10; }
-        else { baseW=60+Math.random()*50; baseH=50+Math.random()*50; }
+        let type=(r<0.14)?'farmhouse':(r<0.28)?'office':(r<0.42)?'barn':(r<0.56)?'tree':(r<0.70)?'radio':(r<0.80)?'silo':(r<0.88)?'water':'horse';
+        // sizes — choose ranges appropriate to the element type
+        let baseW, baseH;
+        if(type === 'tree'){
+          // trees smaller: narrow and shorter than before
+          baseW = 18 + Math.random()*20; // 18..38
+          baseH = 40 + Math.random()*60; // 40..100
+        } else if(type === 'radio'){
+          // radio towers are very skinny but tall
+          baseW = 10 + Math.random()*10; // 10..20 (thinner)
+          baseH = 120 + Math.random()*160; // 120..280
+        } else if(type === 'horse'){
+          // horses are small low-profile objects
+          baseW = 28 + Math.random()*24; // 28..52
+          baseH = 14 + Math.random()*14; // 14..28
+        } else if(type === 'office'){
+          // office buildings: make them thinner than before
+          baseW = 80 + Math.random()*100; // 80..180 (thinner)
+          baseH = 80 + Math.random()*160; // 80..240
+        } else if(type === 'barn'){
+          // barns: reduce width to be less wide
+          baseW = 100 + Math.random()*100; // 100..200 (thinner)
+          baseH = 70 + Math.random()*90; // 70..160
+        } else if(type === 'farmhouse'){
+          // farmhouse: make slightly narrower
+          baseW = 60 + Math.random()*70; // 60..130
+          baseH = 60 + Math.random()*60; // 60..120
+        } else {
+          // fallback block
+          baseW = 50 + Math.random()*40;
+          baseH = 50 + Math.random()*50;
+        }
             let newX = w()+100+Math.random()*200;
             const pad=20, extraBarnTree=100, extraHorseGap=60;
             const groundY=h()-60-baseH;
@@ -106,8 +170,10 @@
               const overlap = groundElements.find(g=>{
                 const centerA = g.x + g.width/2;
                 const centerB = newX + baseW/2;
-                const barnTreeGap = ((g.type==='barn'&&type==='tree')||(g.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
-                const horseAvoid = ((g.type==='horse'&&type!=='horse')||(type==='horse'&&g.type!=='horse')) ? extraHorseGap : 0;
+                    const barnTreeGap = ((g.type==='barn'&&type==='tree')||(g.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
+                    const horseAvoid = ((g.type==='horse'&&type!=='horse')||(type==='horse'&&g.type!=='horse')) ? extraHorseGap : 0;
+                    const siloAvoid = ((g.type==='silo'&&type!=='silo')||(type==='silo'&&g.type!=='silo')) ? 80 : 0;
+                    const waterAvoid = ((g.type==='water'&&type!=='water')||(type==='water'&&g.type!=='water')) ? 100 : 0;
                 const minGap = (g.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid);
                 return Math.abs(centerA - centerB) < minGap;
               });
@@ -115,7 +181,9 @@
               // Move newX to just beyond the overlapping element's edge
               const barnTreeGap = ((overlap.type==='barn'&&type==='tree')||(overlap.type==='tree'&&type==='barn')) ? extraBarnTree : 0;
               const horseAvoid = ((overlap.type==='horse'&&type!=='horse')||(type==='horse'&&overlap.type!=='horse')) ? extraHorseGap : 0;
-              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid);
+              const siloAvoid = ((overlap.type==='silo'&&type!=='silo')||(type==='silo'&&overlap.type!=='silo')) ? 80 : 0;
+              const waterAvoid = ((overlap.type==='water'&&type!=='water')||(type==='water'&&overlap.type!=='water')) ? 100 : 0;
+              const minGap = (overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + siloAvoid + waterAvoid);
               newX = overlap.x + overlap.width/2 + baseW/2 + pad + barnTreeGap + horseAvoid + 10;
               safety++;
               if(safety>50){
@@ -125,7 +193,19 @@
               }
             }
         const phase=(type==='horse')?Math.random()*Math.PI*2:0;
-        groundElements.push({x:newX,y:groundY,width:baseW,height:baseH,type,phase});
+        const elem = {x:newX,y:groundY,width:baseW,height:baseH,type,phase};
+        if(type==='barn'){ elem.doorProgress = 0; elem.doorTarget = 0; }
+        if(type==='tree'){
+          // per-tree shape params to get variation while drawing
+          elem.trunkWidth = Math.max(3, Math.round(baseW * (0.12 + Math.random()*0.12))); // small trunk
+          elem.canopyCount = 2 + Math.floor(Math.random()*3); // 2..4 clumps
+          elem.canopyR = Math.max(12, Math.round(baseW * (0.9 + Math.random()*0.6))); // radius for canopy clumps
+          elem.canopyYOffset = Math.round(baseH * (0.18 + Math.random()*0.18));
+          elem.canopySpread = Math.round(baseW * (0.4 + Math.random()*0.8));
+          elem.leafHueShift = (Math.random()*0.2 - 0.1); // small color variation
+          elem.variantSeed = Math.random();
+        }
+        groundElements.push(elem);
       }
     }
 
@@ -167,25 +247,27 @@
         ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.fillStyle=shadeColorRGB(wall, t*0.25); ctx.fillRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
+        // outline
+        ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         // door
         const dW=g.width*0.2,dH=g.height*0.4,dX=g.x+g.width*0.4,dY=g.y+g.height*0.6;
         ctx.fillStyle=shadeColorRGB([139,69,19],t*0.3); ctx.fillRect(dX,dY,dW,dH);
+        ctx.strokeRect(dX,dY,dW,dH);
         // windows with dynamic reflection
         const winW=g.width*0.2,winH=g.height*0.25;
         const windows=[{x:g.x+g.width*0.1,y:g.y+g.height*0.25},{x:g.x+g.width*0.7,y:g.y+g.height*0.25}];
         windows.forEach(wi=>{
-          const grad=ctx.createLinearGradient(wi.x,wi.y,wi.x+winW,wi.y+winH);
-          grad.addColorStop(0,'#b0e0ff'); grad.addColorStop(0.5,'#fff'); grad.addColorStop(1,'#87ceeb');
+          const grad=ctx.createLinearGradient(wi.x,wi.y,wi.x,wi.y+winH);
+          grad.addColorStop(0,'rgba(255,255,255,0.85)'); grad.addColorStop(0.4,'#b0e0ff'); grad.addColorStop(1,'#87ceeb');
           ctx.fillStyle=grad; ctx.fillRect(wi.x,wi.y,winW,winH);
-          ctx.strokeStyle='#000'; ctx.strokeRect(wi.x,wi.y,winW,winH);
-          const strength = 0.5 + 0.5*Math.sin(frameCount*0.01);
-          const offsetX=(Math.sin(frameCount*0.02)+1)*0.15*winW;
-          ctx.beginPath(); ctx.moveTo(wi.x+offsetX, wi.y+winH*0.1); ctx.lineTo(wi.x+offsetX+winW*0.3, wi.y+winH*0.1);
-          ctx.lineWidth=2; ctx.strokeStyle=`rgba(255,255,255,${0.3+0.4*strength})`; ctx.stroke();
+          ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wi.x,wi.y,winW,winH);
+          // specular highlight
+          ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(wi.x+winW*0.12, wi.y+winH*0.08, winW*0.5, winH*0.18);
         });
         // roof
         ctx.fillStyle=shadeColorRGB([165,42,42],t*0.25);
         ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-18); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=1; ctx.stroke();
         ctx.restore();
         return;
       }
@@ -195,6 +277,8 @@
         ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=5; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
         ctx.fillStyle=shadeColorRGB([150,150,150], t*0.3); ctx.fillRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
+        // outline building
+        ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         // draw window grid
         const cols = Math.max(2, Math.floor(g.width / 14));
         const rows = Math.max(2, Math.floor(g.height / 16));
@@ -208,9 +292,18 @@
             const wy = Math.round(g.y + gapY + ry*(winH+gapY));
             // windows get warmer color toward dusk/night (t=0..1)
             const winColor = lerpColor([40,45,55],[255,230,120], t);
-            ctx.fillStyle = winColor;
+            // reflective vertical gradient: bright at top to window color
+            const wg = ctx.createLinearGradient(wx, wy, wx, wy+winH);
+            wg.addColorStop(0, 'rgba(255,255,255,0.9)');
+            wg.addColorStop(0.18, winColor);
+            wg.addColorStop(1, lerpColor([20,25,30],[180,140,90], t));
+            ctx.fillStyle = wg;
             ctx.fillRect(wx, wy, winW, winH);
-            ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+            // thin outline
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(wx, wy, winW, winH);
+            // subtle specular highlight (top-left)
+            ctx.fillStyle = 'rgba(255,255,255,0.16)';
+            ctx.fillRect(wx + Math.round(winW*0.12), wy + Math.round(winH*0.08), Math.round(winW*0.45), Math.round(winH*0.16));
           }
         }
         ctx.restore();
@@ -220,29 +313,47 @@
       if(g.type==='tree'){
         ctx.save();
         // ground shadow ellipse
-        ctx.fillStyle='rgba(0,0,0,0.25)';
-        ctx.beginPath(); ctx.ellipse(g.x+g.width*0.5+sx, g.y+g.height+4+sy, g.width*0.8, g.width*0.25, 0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(0,0,0,0.22)';
+        ctx.beginPath(); ctx.ellipse(g.x+g.width*0.5+sx, g.y+g.height+4+sy, g.width*0.7, g.width*0.22, 0,0,Math.PI*2); ctx.fill();
         // trunk
         ctx.fillStyle=shadeColorRGB([101,67,33], t*0.25);
-        const tw=Math.max(4,g.width*0.2);
-        ctx.fillRect(g.x+g.width*0.4, g.y+g.height*0.35, tw, g.height*0.65);
-        // canopy
-        const leaf=lerpColor([46,139,87],[20,70,40],t);
-        ctx.fillStyle=leaf; const cx=g.x+g.width*0.5, cy=g.y+g.height*0.25, r=Math.max(g.width,g.height*0.45)*0.6;
-        ctx.beginPath(); ctx.ellipse(cx,cy,r,r*0.8,0,0,Math.PI*2); ctx.ellipse(cx-r*0.6,cy+5,r*0.8,r*0.6,0,0,Math.PI*2); ctx.ellipse(cx+r*0.6,cy+5,r*0.8,r*0.6,0,0,Math.PI*2); ctx.fill();
+        const tw = g.trunkWidth || Math.max(3, Math.round(g.width*0.18));
+        const trunkX = Math.round(g.x + (g.width - tw)/2);
+        const trunkY = Math.round(g.y + g.height*0.35);
+        const trunkH = Math.round(g.height*0.65);
+        ctx.fillRect(trunkX, trunkY, tw, trunkH);
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(trunkX, trunkY, tw, trunkH);
+        // canopy: multiple clumps using per-tree params
+        const leafBase = lerpColor([46,139,87],[20,70,40],t);
+        for(let i=0;i<(g.canopyCount||3);i++){
+          const seed = (g.variantSeed||0.5) * 10 + i*1.37;
+          const cx = Math.round(g.x + g.width*0.5 + (i - ((g.canopyCount||3)-1)/2) * (g.canopySpread || (g.width*0.6)) / (g.canopyCount||3));
+          const cy = Math.round(g.y + (g.canopyYOffset || g.height*0.25) - i*6);
+          const r = Math.round((g.canopyR || Math.max(12, g.width*0.6)) * (0.8 + 0.35 * Math.sin(seed)));
+          const lcT = clamp01(t + (g.leafHueShift || 0));
+          const leafColor = lerpColor([46,139,87],[20,70,40], lcT);
+          ctx.fillStyle = leafColor;
+          ctx.beginPath(); ctx.ellipse(cx, cy, r, Math.round(r*0.8), 0, 0, Math.PI*2); ctx.fill();
+        }
+        // outline canopy rough
+        ctx.strokeStyle='rgba(0,0,0,0.45)'; ctx.lineWidth=1;
+        const outlineCx = g.x+g.width*0.5, outlineCy = g.y+g.height*0.25, outlineR = Math.max(g.width,g.height*0.45)*0.55;
+        ctx.beginPath(); ctx.ellipse(outlineCx, outlineCy, outlineR, outlineR*0.78, 0, 0, Math.PI*2); ctx.stroke();
         ctx.restore();
         return;
       }
 
       if(g.type==='radio'){
         const baseX=g.x+g.width/2, topY=g.y, botY=g.y+g.height;
-        ctx.strokeStyle='#666'; ctx.lineWidth=2;
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1;
         ctx.beginPath();
         ctx.moveTo(baseX-g.width/2,botY); ctx.lineTo(baseX-g.width*0.2,topY);
         ctx.moveTo(baseX+g.width/2,botY); ctx.lineTo(baseX+g.width*0.2,topY);
         for(let y=0;y<g.height;y+=12){ const yPos=botY-y; const t=(y/g.height); const half=lerp(g.width/2,g.width*0.2,t); ctx.moveTo(baseX-half,yPos); ctx.lineTo(baseX+half,yPos-6); }
         ctx.stroke();
         ctx.fillStyle='#777'; ctx.beginPath(); ctx.arc(baseX, topY-6, 6, 0, Math.PI*2); ctx.fill();
+        // outline base block
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(g.x, g.y, g.width, g.height);
         return;
       }
 
@@ -252,13 +363,109 @@
         const sy=Math.sin(sunlightAngle)*shadowLen;
         ctx.save();
         ctx.fillStyle='#8b0000'; ctx.fillRect(g.x,g.y,g.width,g.height);
+        // siding: vertical boards + subtle horizontal planks for texture
+        ctx.save();
+        const boardCount = Math.max(4, Math.floor(g.width / 18));
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1;
+        for(let i=1;i<boardCount;i++){
+          const bx = Math.round(g.x + i*(g.width/boardCount));
+          ctx.beginPath(); ctx.moveTo(bx, g.y+6); ctx.lineTo(bx, g.y+g.height-6); ctx.stroke();
+        }
+        // horizontal plank seams
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1;
+        const rowH = 14;
+        for(let y = g.y + rowH; y < g.y + g.height - 8; y += rowH){ ctx.beginPath(); ctx.moveTo(g.x+6, y); ctx.lineTo(g.x + g.width - 6, y); ctx.stroke(); }
+        ctx.restore();
         ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6; ctx.shadowOffsetX=sx; ctx.shadowOffsetY=sy;
-        ctx.strokeStyle='white'; ctx.lineWidth=3; ctx.strokeRect(g.x,g.y,g.width,g.height);
+        ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.lineWidth=1; ctx.strokeRect(g.x,g.y,g.width,g.height);
         ctx.shadowColor='transparent';
-        const doorX=g.x+g.width/3, doorY=g.y+g.height*0.6, doorW=g.width/3, doorH=g.height*0.4;
-        ctx.save(); ctx.clearRect(doorX,doorY,doorW,doorH); ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.strokeRect(doorX,doorY,doorW,doorH); ctx.restore();
+        // sliding double-doors: two panels that slide sideways based on g.doorProgress
+        const doorTotalW = Math.max(24, Math.floor(g.width * 0.33));
+        const doorY = g.y + g.height * 0.6;
+        const doorH = Math.max(12, Math.floor(g.height * 0.4));
+        const leftPanelW = Math.ceil(doorTotalW / 2);
+        const rightPanelW = doorTotalW - leftPanelW;
+        const closedLeftX = Math.round(g.x + (g.width - doorTotalW) / 2);
+        const closedRightX = closedLeftX + leftPanelW;
+        const openOffsetLeft = Math.round((leftPanelW + 8) * (g.doorProgress || 0));
+        const openOffsetRight = Math.round((rightPanelW + 8) * (g.doorProgress || 0));
+        const leftX = closedLeftX - openOffsetLeft;
+        const rightX = closedRightX + openOffsetRight;
+        // opening: clear the door aperture so the sky drawn earlier shows through
+        ctx.clearRect(closedLeftX, doorY, doorTotalW, doorH);
+
+        // draw left panel
+        ctx.save();
+        ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
+        ctx.fillRect(leftX, doorY, leftPanelW, doorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(leftX, doorY, leftPanelW, doorH);
+        // X brace on left panel
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(leftX + 6, doorY + 6); ctx.lineTo(leftX + leftPanelW - 6, doorY + doorH - 6); ctx.moveTo(leftX + leftPanelW - 6, doorY + 6); ctx.lineTo(leftX + 6, doorY + doorH - 6); ctx.stroke();
+        // draw right panel
+        ctx.fillStyle = shadeColorRGB([110,60,30], t*0.2);
+        ctx.fillRect(rightX, doorY, rightPanelW, doorH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.strokeRect(rightX, doorY, rightPanelW, doorH);
+        // X brace on right panel
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(rightX + 6, doorY + 6); ctx.lineTo(rightX + rightPanelW - 6, doorY + doorH - 6); ctx.moveTo(rightX + rightPanelW - 6, doorY + 6); ctx.lineTo(rightX + 6, doorY + doorH - 6); ctx.stroke();
+        // plank seams for each panel
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        const seamsLeft = Math.max(0, Math.floor((leftPanelW - 6) / 20));
+        for(let si=1; si<=seamsLeft; si++){ const px = leftX + Math.round((leftPanelW/(seamsLeft+1))*si); ctx.beginPath(); ctx.moveTo(px, doorY + 6); ctx.lineTo(px, doorY + doorH - 6); ctx.stroke(); }
+        const seamsRight = Math.max(0, Math.floor((rightPanelW - 6) / 20));
+        for(let si=1; si<=seamsRight; si++){ const px = rightX + Math.round((rightPanelW/(seamsRight+1))*si); ctx.beginPath(); ctx.moveTo(px, doorY + 6); ctx.lineTo(px, doorY + doorH - 6); ctx.stroke(); }
+        ctx.restore();
         ctx.fillStyle=shadeColorRGB([165,42,42], t*0.25);
         ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.width/2,g.y-20); ctx.lineTo(g.x+g.width,g.y); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      if(g.type==='silo'){
+        // simple grain silo: cylindrical body with dome top and base shadow
+        ctx.save();
+        const bodyW = g.width, bodyH = g.height;
+        const bx = g.x, by = g.y;
+        // shadow on ground
+        ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5+sx, by+bodyH+6+sy, bodyW*0.6, bodyW*0.18, 0,0,Math.PI*2); ctx.fill();
+        // body
+        const baseColor = shadeColorRGB([190,190,200], t*0.08);
+        ctx.fillStyle = baseColor; ctx.fillRect(bx, by, bodyW, bodyH);
+        // top ellipse
+        ctx.fillStyle = shadeColorRGB([210,210,220], t*0.04);
+        ctx.beginPath(); ctx.ellipse(bx+bodyW*0.5, by+4, bodyW*0.52, 8, 0, 0, Math.PI*2); ctx.fill();
+        // bands
+        ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1; for(let y=by+8;y<by+bodyH-6;y+=12){ ctx.beginPath(); ctx.moveTo(bx+4,y); ctx.lineTo(bx+bodyW-4,y); ctx.stroke(); }
+        // outline
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(bx, by, bodyW, bodyH);
+        ctx.restore();
+        return;
+      }
+
+      if(g.type==='water'){
+        // municipal water tower: tall legs and a tank on top
+        ctx.save();
+        const wx = g.x, wy = g.y, ww = g.width, wh = g.height;
+        // legs
+        const legW = Math.max(3, Math.round(ww*0.12));
+        const legH = Math.round(wh*0.7);
+        ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=2;
+        const lx1 = wx+ww*0.25, lx2 = wx+ww*0.75; const legTop = wy + (wh - legH);
+        ctx.beginPath(); ctx.moveTo(lx1, wy+wh); ctx.lineTo(lx1 - 8, legTop); ctx.lineTo(lx1, legTop); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(lx2, wy+wh); ctx.lineTo(lx2 + 8, legTop); ctx.lineTo(lx2, legTop); ctx.stroke();
+        // central support
+        ctx.beginPath(); ctx.moveTo(wx+ww*0.5, wy+wh); ctx.lineTo(wx+ww*0.5, legTop+4); ctx.stroke();
+        // tank
+        const tankW = ww * 1.2; const tankH = Math.max(18, Math.round(wh*0.18));
+        const tankX = Math.round(wx + (ww - tankW)/2);
+        const tankY = legTop - tankH - 2;
+        ctx.fillStyle = shadeColorRGB([160,180,200], t*0.05);
+        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + 6, tankW*0.5, 8, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillRect(tankX, tankY+6, tankW, tankH);
+        ctx.beginPath(); ctx.ellipse(tankX + tankW*0.5, tankY + 6 + tankH, tankW*0.5, 6, 0, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1; ctx.strokeRect(tankX, tankY+6, tankW, tankH);
         ctx.restore();
         return;
       }
@@ -269,8 +476,10 @@
         const legOffset=Math.sin(legPhase)*2;
         const yBase=g.y + bob;
         ctx.fillStyle='#654321'; ctx.fillRect(g.x, yBase+g.height*0.4, g.width, g.height*0.6);
+        ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=1; ctx.strokeRect(g.x, yBase+g.height*0.4, g.width, g.height*0.6);
         const nx=g.x+g.width*0.15, ny=yBase+g.height*0.1, nw=g.width*0.35, nh=g.height*0.4;
         ctx.fillStyle='#4b3621'; ctx.fillRect(nx, ny, nw, nh);
+        ctx.strokeRect(nx, ny, nw, nh);
         ctx.fillStyle='#3b2a1a'; for(let i=0;i<4;i++){ const px=nx + i*(nw/4); const flick=4 + 3*Math.max(0, Math.sin(frameCount*0.3 + g.phase + i)); ctx.beginPath(); ctx.moveTo(px,ny); ctx.lineTo(px+nw/8,ny-flick); ctx.lineTo(px+nw/4,ny); ctx.closePath(); ctx.fill(); }
         ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(g.x+g.width*0.45, yBase+g.height*0.05, 3, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle='#4b3621';
@@ -471,6 +680,18 @@
       for(const r of rings) r.x -= worldShift;
       for(const b of bullets) b.x += (b.speed - worldShift);
 
+      // update interactive door state for barns (open when plane approaches)
+      for(const g of groundElements){
+        if(g.type==='barn'){
+          const doorCenterY = g.y + g.height*0.8;
+          const approach = (plane.x + 140 > g.x && plane.x < g.x + g.width + 40 && Math.abs(plane.y - doorCenterY) < g.height*0.6);
+          g.doorTarget = approach ? 1 : 0;
+          g.doorProgress = (g.doorProgress || 0) + (g.doorTarget - (g.doorProgress || 0)) * 0.14;
+          // clamp
+          g.doorProgress = Math.max(0, Math.min(1, g.doorProgress));
+        }
+      }
+
       // cull
       clouds=clouds.filter(c=>c.x>-c.size);
       groundElements=groundElements.filter(g=>g.x>-g.width);
@@ -498,6 +719,29 @@
         for(const g of groundElements){
           const gx = g.x, gy = g.y, gw = g.width, gh = g.height;
           if(px < gx + gw && px + pw > gx && py < gy + gh && py + ph > gy){
+            // if it's a barn, allow passage through the door when fully open and plane is inside the door area
+            if(g.type==='barn'){
+              const doorTotalW = Math.max(24, Math.floor(g.width * 0.33));
+              const leftPanelW = Math.ceil(doorTotalW / 2);
+              const rightPanelW = doorTotalW - leftPanelW;
+              const closedLeftX = Math.round(g.x + (g.width - doorTotalW) / 2);
+              const closedRightX = closedLeftX + leftPanelW;
+              const doorY = g.y + g.height * 0.6;
+              const doorH = Math.max(12, Math.floor(g.height * 0.4));
+              const openOffsetLeft = Math.round((leftPanelW + 8) * (g.doorProgress || 0));
+              const openOffsetRight = Math.round((rightPanelW + 8) * (g.doorProgress || 0));
+              const leftX = closedLeftX - openOffsetLeft;
+              const rightX = closedRightX + openOffsetRight;
+              const apertureLeft = leftX + leftPanelW;
+              const apertureRight = rightX;
+              const apertureW = apertureRight - apertureLeft;
+              // allow passage if there's a real opening and the plane overlaps the door vertically
+              const planeVertOverlapDoor = (py < doorY + doorH) && (py + ph > doorY);
+              const planeHorizIntersectsAperture = (px + pw > apertureLeft) && (px < apertureRight);
+              if(apertureW > 8 && planeVertOverlapDoor && planeHorizIntersectsAperture){
+                continue; // plane is at door level and within the aperture — allow passage
+              }
+            }
             crashPlane(); break;
           }
         }
@@ -507,9 +751,13 @@
       checkRingCollisions();
     }
 
-    function update(){
+    function update(ts){
+      if(lastTime===null) lastTime = ts;
+      const dt = (ts - lastTime)/1000; // seconds since last frame
+      lastTime = ts;
       frameCount++;
-      sunlightAngle += 0.002; // move sun slowly
+      // advance sun based on real elapsed time for a smooth day/night cycle
+      sunlightAngle += (2*Math.PI / dayDuration) * dt;
       const speed=currentScrollSpeed();
       worldStep(speed);
       if(!paused) requestAnimationFrame(update);
@@ -522,15 +770,19 @@
       groundElements.push({x:Math.max(40,Math.min(200,w()-bw-40)), y:h()-60-bh, width:bw, height:bh, type:'farmhouse'});
       for(let i=0;i<3;i++){ clouds.push({x:80+i*140, y:40+i*20, size:30+10*i}); }
     }
-    seedDemo(); // seedDemo
+    // start demo and starfield
+    seedDemo();
+    generateStars(120);
 
     // === Audio ===
     let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
     // engine pitch tuning
-    const engineBaseFreq = 140;
-    // make pitch range 0.25 as sensitive (smaller Hz offsets)
-    const speedFreqFactor = 40 * 0.25; // Hz per scroll-speed unit
-    const angleFreqFactor = 60 * 0.25; // Hz per radian of tilt
+    // make the engine much lower and less warbly
+    const engineBaseFreq = 70; // lower base tone (was 140)
+    // previously scaled to 0.25 sensitivity; now reduce that sensitivity by 25% (i.e. *0.75)
+    // resulting factors: speed: 40 * 0.25 * 0.75 = 7.5 ; angle: 60 * 0.25 * 0.75 = 11.25
+    const speedFreqFactor = 7.5; // Hz per scroll-speed unit (reduced by 25%)
+    const angleFreqFactor = 11.25; // Hz per radian of tilt (reduced by 25%)
     const freqSmoothing = 0.08;
     const minEngineFreq = 80;
     const maxEngineFreq = 800;
@@ -539,10 +791,10 @@
       if(audioInited) return; audioInited=true;
       audioCtx=new (window.AudioContext||window.webkitAudioContext)();
       // engine hum: sawtooth ~140Hz with gentle tremolo
-      engineOsc=audioCtx.createOscillator(); engineOsc.type='sawtooth'; engineOsc.frequency.value=140;
-      engineGain=audioCtx.createGain(); engineGain.gain.value=0.04; // base volume
-      lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=3.2; // oscillation
-      lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.02; // depth
+      engineOsc=audioCtx.createOscillator(); engineOsc.type='sawtooth'; engineOsc.frequency.value=engineBaseFreq;
+      engineGain=audioCtx.createGain(); engineGain.gain.value=0.03; // base volume (slightly lower)
+      lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=1.2; // slower oscillation (less warble)
+      lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.005; // shallower tremolo depth
       lfoOsc.connect(lfoGain); lfoGain.connect(engineGain.gain);
       engineOsc.connect(engineGain).connect(audioCtx.destination);
       engineOsc.start(); lfoOsc.start();
@@ -568,7 +820,9 @@
       paused = false;
       // reseed a simple scene
       seedDemo();
+      generateStars(120);
       // resume loop
+      lastTime = null;
       requestAnimationFrame(update);
     }
 
@@ -576,7 +830,7 @@
     function fireBullet(){ bullets.push({x:plane.x+40, y:plane.y, speed:6}); playPop(); }
     function drawBullets(){ ctx.fillStyle='yellow'; for(const b of bullets){ ctx.beginPath(); ctx.arc(b.x,b.y,2.5,0,Math.PI*2); ctx.fill(); } }
 
-    update();
+    requestAnimationFrame(update);
   </script>
 </body>
 </html>
