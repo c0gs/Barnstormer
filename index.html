@@ -450,7 +450,16 @@
       rings=rings.filter(r=>r.x>-r.radius || !r.collected);
       bullets=bullets.filter(b=>b.x < w()+40);
 
-      // plane collision checks (only when alive)
+      // draw
+      clouds.forEach(drawCloud);
+      groundElements.forEach(drawGroundElement);
+      updateDust(speed);
+      drawRings();
+      // bullets
+      drawBullets();
+      drawPlane();
+
+      // plane collision checks (only when alive) -- run after drawing so snapshot captures crash moment
       if(plane.alive){
         // ground collision: if plane hits the ground surface
         const groundTop = h() - 60;
@@ -466,18 +475,6 @@
           }
         }
       }
-
-      // handle paused state: if paused, do not continue the animation loop further
-      if(paused) return;
-
-      // draw
-      clouds.forEach(drawCloud);
-      groundElements.forEach(drawGroundElement);
-      updateDust(speed);
-      drawRings();
-      // bullets
-      drawBullets();
-      drawPlane();
 
       // ring collect
       checkRingCollisions();
