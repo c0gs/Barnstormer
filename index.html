@@ -1593,6 +1593,23 @@
       plane.alive = true; plane.crashed = false; plane.angle = 0; plane.propAngle = 0; plane.loopActive = false; plane.loopProgress = 0;
       plane.y = h()/2; plane.prevY = h()/2;
       paused = false;
+      // restart engine audio: reset gain and recreate source node
+      if(audioCtx && engineGain && engineBuffer){
+        try{
+          // reset gain to normal
+          engineGain.gain.cancelScheduledValues(audioCtx.currentTime);
+          engineGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+          // stop old source if still running
+          if(engineSource){ try{ engineSource.stop(); engineSource.disconnect(); }catch(e){} }
+          // create new source and start
+          engineSource = audioCtx.createBufferSource();
+          engineSource.buffer = engineBuffer;
+          engineSource.loop = true;
+          engineSource.playbackRate.value = 1.0;
+          engineSource.connect(engineGain).connect(audioCtx.destination);
+          engineSource.start();
+        }catch(e){ console.error('Audio restart error', e); }
+      }
       // reseed a simple scene
       seedDemo();
       generateStars(120);
