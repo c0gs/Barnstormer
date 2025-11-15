@@ -1304,7 +1304,13 @@
       `;
       document.body.appendChild(overlay);
       const btn = document.getElementById('restartBtn');
-      if(btn) btn.addEventListener('click', ()=>{ overlay.remove(); try{ if(audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch(e){} restartGame(); });
+      if(btn) btn.addEventListener('click', async ()=>{ 
+        overlay.remove(); 
+        try{ 
+          if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume(); 
+        }catch(e){} 
+        restartGame(); 
+      });
     }
 
     // === World step ===
