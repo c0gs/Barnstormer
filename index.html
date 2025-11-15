@@ -1271,12 +1271,9 @@
       plane.crashed = true;
       plane.propAngle = 0;
       paused = true;
-      try{ playChime(); }catch(e){}
+      try{ playCrash(); }catch(e){}
       // spawn crash dust
       for(let i=0;i<20;i++){ dustParticles.push({x:plane.x + (Math.random()*80-40), y:plane.y + (Math.random()*40-20), size:2+Math.random()*4, alpha:1, vy:-1-Math.random()*2}); }
-
-      // suspend audio if running
-      try{ if(audioCtx && audioCtx.state==='running') audioCtx.suspend(); }catch(e){}
 
       // create overlay with restart button and use a snapshot of the canvas as background so the crash moment is frozen
       const existing = document.getElementById('crashOverlay');
@@ -1518,7 +1515,7 @@
 
     // === Audio ===
     // Replace synthetic oscillator with looping biplane engine sample
-    let audioCtx=null, engineSource=null, engineBuffer=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
+    let audioCtx=null, engineSource=null, engineBuffer=null, engineGain=null, lfoOsc=null, lfoGain=null, crashBuffer=null; let audioInited=false; let muted=false;
     // playbackRate modulation parameters (maps plane motion to engine pitch)
     const rateSmoothing = 0.06;
     const minPlaybackRate = 0.8;
@@ -1534,6 +1531,14 @@
           const arr = await res.arrayBuffer();
           engineBuffer = await audioCtx.decodeAudioData(arr);
         }catch(e){ console.error('Failed to load biplane_engine.wav', e); }
+      }
+      // prefetch crash buffer
+      if(!crashBuffer){
+        try{
+          const r2 = await fetch('biplane_crash.wav');
+          const a2 = await r2.arrayBuffer();
+          crashBuffer = await audioCtx.decodeAudioData(a2);
+        }catch(e){ console.error('Failed to load biplane_crash.wav', e); }
       }
       // create nodes
       engineGain=audioCtx.createGain(); engineGain.gain.value=0.06; // base volume
@@ -1559,6 +1564,25 @@
     function quickBeep(freq=880, dur=0.12, vol=0.08){ if(!audioCtx||muted||audioCtx.state!=='running') return; const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; g.gain.value=vol; o.connect(g).connect(audioCtx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+dur); o.stop(audioCtx.currentTime+dur); }
     function playChime(){ quickBeep(1200,0.15,0.1); }
     function playPop(){ quickBeep(220,0.08,0.08); }
+
+    function playCrash(){
+      try{
+        if(!audioCtx) return;
+        if(audioCtx.state==='suspended'){ audioCtx.resume().catch(()=>{}); }
+        if(!crashBuffer) return;
+        const g = audioCtx.createGain();
+        g.gain.value = 0.22; // crash volume
+        const s = audioCtx.createBufferSource();
+        s.buffer = crashBuffer;
+        s.playbackRate.value = 1.0 + (Math.random()*0.08 - 0.04);
+        s.connect(g).connect(audioCtx.destination);
+        s.start();
+        // fade engine quickly
+        if(engineGain){ try{ const now=audioCtx.currentTime; const cur=engineGain.gain.value; engineGain.gain.cancelScheduledValues(now); engineGain.gain.setValueAtTime(cur, now); engineGain.gain.linearRampToValueAtTime(0.0, now+0.25);}catch(e){} }
+        // optionally suspend a bit later so the tail rings out
+        setTimeout(()=>{ try{ if(audioCtx && audioCtx.state==='running') audioCtx.suspend(); }catch(e){} }, 1200);
+      }catch(e){}
+    }
 
     function restartGame(){
       // clear world
