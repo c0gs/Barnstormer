@@ -1535,10 +1535,10 @@
       // prefetch crash buffer
       if(!crashBuffer){
         try{
-          const r2 = await fetch('biplane_crash.wav');
+          const r2 = await fetch('biplane_crash_cartoonish.wav');
           const a2 = await r2.arrayBuffer();
           crashBuffer = await audioCtx.decodeAudioData(a2);
-        }catch(e){ console.error('Failed to load biplane_crash.wav', e); }
+        }catch(e){ console.error('Failed to load biplane_crash_cartoonish.wav', e); }
       }
       // create nodes
       engineGain=audioCtx.createGain(); engineGain.gain.value=0.06; // base volume
