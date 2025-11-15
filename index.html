@@ -1374,17 +1374,17 @@
       // world scroll should match plane's intended horizontal movement: increase scroll when plane points right
       const worldShift = speed + vx;
 
-      // audio pitch modulation: alter engine oscillator frequency by speed, plane angle, and vertical velocity
-      if(audioInited && engineOsc){
+      // audio pitch modulation: alter engine playback rate by speed, plane angle, and vertical velocity
+      if(audioInited && engineSource){
         try{
-          const current = engineOsc.frequency.value || engineBaseFreq;
+          const current = engineSource.playbackRate.value || 1.0;
           // calculate vertical velocity (positive = diving down, negative = climbing up)
           const vy = plane.y - plane.prevY;
-          // diving (positive vy) lowers pitch, climbing (negative vy) raises pitch
-          const vyFreqFactor = -25; // Hz per pixel of vertical velocity (negative sign inverts)
-          const target = engineBaseFreq + speed * speedFreqFactor + plane.angle * angleFreqFactor + vy * vyFreqFactor;
-          const clamped = Math.max(minEngineFreq, Math.min(maxEngineFreq, target));
-          engineOsc.frequency.value = current + (clamped - current) * freqSmoothing;
+          // build a small rate delta: speed up when nose down/right, slow when up/left, slight response to vy
+          const rateDelta = speed * 0.06 + plane.angle * 0.15 + vy * (-0.002);
+          const target = 1.0 + rateDelta;
+          const clamped = Math.max(minPlaybackRate, Math.min(maxPlaybackRate, target));
+          engineSource.playbackRate.value = current + (clamped - current) * rateSmoothing;
         }catch(e){/* ignore if audio not ready */}
       }
       
@@ -1517,29 +1517,36 @@
     generateStars(120);
 
     // === Audio ===
-    let audioCtx=null, engineOsc=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
-    // engine pitch tuning
-    // make the engine much lower and less warbly
-    const engineBaseFreq = 70; // lower base tone (was 140)
-    // previously scaled to 0.25 sensitivity; now reduce that sensitivity by 25% (i.e. *0.75)
-    // resulting factors: speed: 40 * 0.25 * 0.75 = 7.5 ; angle: 60 * 0.25 * 0.75 = 11.25
-    const speedFreqFactor = 7.5; // Hz per scroll-speed unit (reduced by 25%)
-    const angleFreqFactor = 11.25; // Hz per radian of tilt (reduced by 25%)
-    const freqSmoothing = 0.08;
-    const minEngineFreq = 80;
-    const maxEngineFreq = 800;
+    // Replace synthetic oscillator with looping biplane engine sample
+    let audioCtx=null, engineSource=null, engineBuffer=null, engineGain=null, lfoOsc=null, lfoGain=null; let audioInited=false; let muted=false;
+    // playbackRate modulation parameters (maps plane motion to engine pitch)
+    const rateSmoothing = 0.06;
+    const minPlaybackRate = 0.8;
+    const maxPlaybackRate = 1.4;
     const muteBtn=document.getElementById('mute');
-    function initAudio(){
+    async function initAudio(){
       if(audioInited) return; audioInited=true;
       audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-      // engine hum: sawtooth ~140Hz with gentle tremolo
-      engineOsc=audioCtx.createOscillator(); engineOsc.type='sawtooth'; engineOsc.frequency.value=engineBaseFreq;
-      engineGain=audioCtx.createGain(); engineGain.gain.value=0.03; // base volume (slightly lower)
-      lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=1.2; // slower oscillation (less warble)
-      lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.005; // shallower tremolo depth
+      // load engine buffer if needed
+      if(!engineBuffer){
+        try{
+          const res = await fetch('biplane_engine.wav');
+          const arr = await res.arrayBuffer();
+          engineBuffer = await audioCtx.decodeAudioData(arr);
+        }catch(e){ console.error('Failed to load biplane_engine.wav', e); }
+      }
+      // create nodes
+      engineGain=audioCtx.createGain(); engineGain.gain.value=0.06; // base volume
+      lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=1.0; // gentle tremolo
+      lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.01; // tremolo depth
       lfoOsc.connect(lfoGain); lfoGain.connect(engineGain.gain);
-      engineOsc.connect(engineGain).connect(audioCtx.destination);
-      engineOsc.start(); lfoOsc.start();
+      if(engineBuffer){
+        engineSource = audioCtx.createBufferSource();
+        engineSource.buffer = engineBuffer; engineSource.loop = true; engineSource.playbackRate.value = 1.0;
+        engineSource.connect(engineGain).connect(audioCtx.destination);
+        engineSource.start();
+      }
+      lfoOsc.start();
     }
     function setMuted(m){
       muted=m; muteBtn.textContent = muted ? '🔇' : '🔊';
