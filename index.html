@@ -1522,6 +1522,7 @@
     // === Audio ===
     // Replace synthetic oscillator with looping biplane engine sample
     let audioCtx=null, engineSource=null, engineBuffer=null, engineGain=null, lfoOsc=null, lfoGain=null, crashBuffer=null; let audioInited=false; let muted=false;
+    let crashSuspendTimeout = null; // track timeout to prevent mid-game suspension
     // playbackRate modulation parameters (maps plane motion to engine pitch)
     const rateSmoothing = 0.06;
     const minPlaybackRate = 0.8;
@@ -1606,8 +1607,13 @@
         s.start();
         // fade engine quickly
         if(engineGain){ try{ const now=audioCtx.currentTime; const cur=engineGain.gain.value; engineGain.gain.cancelScheduledValues(now); engineGain.gain.setValueAtTime(cur, now); engineGain.gain.linearRampToValueAtTime(0.0, now+0.25);}catch(e){} }
-        // optionally suspend a bit later so the tail rings out
-        setTimeout(()=>{ try{ if(audioCtx && audioCtx.state==='running') audioCtx.suspend(); }catch(e){} }, 1200);
+        // clear old timeout if exists
+        if(crashSuspendTimeout){ clearTimeout(crashSuspendTimeout); crashSuspendTimeout = null; }
+        // suspend a bit later so the tail rings out
+        crashSuspendTimeout = setTimeout(()=>{ 
+          crashSuspendTimeout = null;
+          try{ if(audioCtx && audioCtx.state==='running') audioCtx.suspend(); }catch(e){} 
+        }, 1200);
       }catch(e){}
     }
 
@@ -1620,6 +1626,8 @@
       plane.alive = true; plane.crashed = false; plane.angle = 0; plane.propAngle = 0; plane.loopActive = false; plane.loopProgress = 0;
       plane.y = h()/2; plane.prevY = h()/2;
       paused = false;
+      // cancel pending audio suspend from crash
+      if(crashSuspendTimeout){ clearTimeout(crashSuspendTimeout); crashSuspendTimeout = null; }
       // restart engine audio
       startEngineLoop();
       // reseed a simple scene
