@@ -1546,18 +1546,39 @@
           crashBuffer = await audioCtx.decodeAudioData(a2);
         }catch(e){ console.error('Failed to load biplane_crash_cartoonish.wav', e); }
       }
-      // create nodes
-      engineGain=audioCtx.createGain(); engineGain.gain.value=0.06; // base volume
-      lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=1.0; // gentle tremolo
-      lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.01; // tremolo depth
-      lfoOsc.connect(lfoGain); lfoGain.connect(engineGain.gain);
-      if(engineBuffer){
-        engineSource = audioCtx.createBufferSource();
-        engineSource.buffer = engineBuffer; engineSource.loop = true; engineSource.playbackRate.value = 1.0;
-        engineSource.connect(engineGain).connect(audioCtx.destination);
-        engineSource.start();
+      // create persistent nodes (only once)
+      if(!engineGain){
+        engineGain=audioCtx.createGain(); engineGain.gain.value=0.06; // base volume
+        engineGain.connect(audioCtx.destination);
       }
-      lfoOsc.start();
+      if(!lfoOsc){
+        lfoOsc=audioCtx.createOscillator(); lfoOsc.type='sine'; lfoOsc.frequency.value=1.0; // gentle tremolo
+        lfoGain=audioCtx.createGain(); lfoGain.gain.value=0.01; // tremolo depth
+        lfoOsc.connect(lfoGain); lfoGain.connect(engineGain.gain);
+        lfoOsc.start();
+      }
+      // start engine loop
+      startEngineLoop();
+    }
+    function startEngineLoop(){
+      if(!audioCtx || !engineBuffer || !engineGain) return;
+      // stop and disconnect old source if exists
+      if(engineSource){
+        try{ engineSource.stop(); engineSource.disconnect(); }catch(e){}
+        engineSource = null;
+      }
+      // reset gain to normal
+      try{
+        engineGain.gain.cancelScheduledValues(audioCtx.currentTime);
+        engineGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+      }catch(e){}
+      // create fresh source
+      engineSource = audioCtx.createBufferSource();
+      engineSource.buffer = engineBuffer;
+      engineSource.loop = true;
+      engineSource.playbackRate.value = 1.0;
+      engineSource.connect(engineGain);
+      engineSource.start();
     }
     function setMuted(m){
       muted=m; muteBtn.textContent = muted ? '🔇' : '🔊';
@@ -1599,23 +1620,8 @@
       plane.alive = true; plane.crashed = false; plane.angle = 0; plane.propAngle = 0; plane.loopActive = false; plane.loopProgress = 0;
       plane.y = h()/2; plane.prevY = h()/2;
       paused = false;
-      // restart engine audio: reset gain and recreate source node
-      if(audioCtx && engineGain && engineBuffer){
-        try{
-          // reset gain to normal
-          engineGain.gain.cancelScheduledValues(audioCtx.currentTime);
-          engineGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
-          // stop old source if still running
-          if(engineSource){ try{ engineSource.stop(); engineSource.disconnect(); }catch(e){} }
-          // create new source and start
-          engineSource = audioCtx.createBufferSource();
-          engineSource.buffer = engineBuffer;
-          engineSource.loop = true;
-          engineSource.playbackRate.value = 1.0;
-          engineSource.connect(engineGain).connect(audioCtx.destination);
-          engineSource.start();
-        }catch(e){ console.error('Audio restart error', e); }
-      }
+      // restart engine audio
+      startEngineLoop();
       // reseed a simple scene
       seedDemo();
       generateStars(120);
