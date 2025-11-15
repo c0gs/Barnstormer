@@ -1568,11 +1568,18 @@
         try{ engineSource.stop(); engineSource.disconnect(); }catch(e){}
         engineSource = null;
       }
-      // reset gain to normal
+      // reset gain to normal - cancel all scheduled events including ramps
       try{
-        engineGain.gain.cancelScheduledValues(audioCtx.currentTime);
-        engineGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
-      }catch(e){}
+        const now = audioCtx.currentTime;
+        engineGain.gain.cancelAndHoldAtTime(now);
+        engineGain.gain.setValueAtTime(0.06, now);
+      }catch(e){
+        // fallback for browsers without cancelAndHoldAtTime
+        try{
+          engineGain.gain.cancelScheduledValues(audioCtx.currentTime);
+          engineGain.gain.value = 0.06;
+        }catch(e2){}
+      }
       // create fresh source
       engineSource = audioCtx.createBufferSource();
       engineSource.buffer = engineBuffer;
