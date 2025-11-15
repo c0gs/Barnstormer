@@ -1568,16 +1568,23 @@
         try{ engineSource.stop(); engineSource.disconnect(); }catch(e){}
         engineSource = null;
       }
-      // reset gain to normal - cancel all scheduled events including ramps
+      // reset gain to normal - disconnect LFO temporarily to avoid modulation issues
       try{
         const now = audioCtx.currentTime;
+        // disconnect LFO temporarily
+        if(lfoGain){ try{ lfoGain.disconnect(); }catch(e){} }
+        // cancel all automation and set clean value
         engineGain.gain.cancelAndHoldAtTime(now);
         engineGain.gain.setValueAtTime(0.06, now);
+        // reconnect LFO
+        if(lfoGain){ try{ lfoGain.connect(engineGain.gain); }catch(e){} }
       }catch(e){
         // fallback for browsers without cancelAndHoldAtTime
         try{
+          if(lfoGain){ try{ lfoGain.disconnect(); }catch(e){} }
           engineGain.gain.cancelScheduledValues(audioCtx.currentTime);
           engineGain.gain.value = 0.06;
+          if(lfoGain){ try{ lfoGain.connect(engineGain.gain); }catch(e){} }
         }catch(e2){}
       }
       // create fresh source
